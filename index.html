@@ -4,887 +4,220 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Dashboard Processual — Viniciu Gonçalves</title>
-<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' fill='%230a0a0a'/%3E%3Ctext x='32' y='46' font-family='Georgia,serif' font-size='38' font-weight='700' fill='%23c9a84c' text-anchor='middle'%3EVG%3C/text%3E%3C/svg%3E">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' fill='%230a0a0a' rx='8'/%3E%3Ctext x='32' y='46' font-family='Georgia,serif' font-size='36' font-weight='700' fill='%23c9a84c' text-anchor='middle'%3EVG%3C/text%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-<!-- Firebase SDK (compat) -->
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
 <style>
-  /* ============================================================
-     DESIGN SYSTEM — Viniciu Gonçalves Advocacia
-     Paleta: Preto · Cinza escuro · Dourado · Branco
-  ============================================================ */
-  :root {
-    --bg:          #0a0a0a;
-    --surface:     #111111;
-    --surface2:    #181818;
-    --surface3:    #1e1e1e;
-    --border:      #242424;
-    --border2:     #1c1c1c;
-    --gold:        #c9a84c;
-    --gold-lt:     #e0c068;
-    --gold-dk:     #9a7830;
-    --gold-sub:    rgba(201,168,76,0.10);
-    --gold-sub2:   rgba(201,168,76,0.05);
-    --text:        #eeeeee;
-    --text2:       #8a8a8a;
-    --text3:       #484848;
-    --urgent:      #e05252;
-    --urgent-bg:   rgba(224,82,82,0.10);
-    --ok:          #52b788;
-    --ok-bg:       rgba(82,183,136,0.10);
-    --blue:        #5b9cf6;
-    --blue-bg:     rgba(91,156,246,0.10);
-    --r:           10px;
-    --r-sm:        6px;
-    --r-lg:        14px;
-    --shadow:      0 8px 32px rgba(0,0,0,0.5);
-    --shadow-sm:   0 2px 10px rgba(0,0,0,0.35);
-    --transition:  0.18s ease;
-  }
+:root {
+  --bg:#0a0a0a; --surface:#111111; --surface2:#181818; --surface3:#1e1e1e;
+  --border:#242424; --border2:#1c1c1c;
+  --gold:#c9a84c; --gold-lt:#e0c068; --gold-dk:#9a7830;
+  --gold-sub:rgba(201,168,76,0.10); --gold-sub2:rgba(201,168,76,0.05);
+  --text:#eeeeee; --text2:#8a8a8a; --text3:#484848;
+  --urgent:#e05252; --urgent-bg:rgba(224,82,82,0.10);
+  --ok:#52b788; --ok-bg:rgba(82,183,136,0.10);
+  --blue:#5b9cf6; --blue-bg:rgba(91,156,246,0.10);
+  --warn:#e67e22; --warn-bg:rgba(230,126,34,0.10);
+  --purple:#a78bfa; --purple-bg:rgba(167,139,250,0.10);
+  --r:10px; --r-sm:6px; --r-lg:14px;
+  --shadow:0 8px 32px rgba(0,0,0,0.55); --shadow-sm:0 2px 10px rgba(0,0,0,0.35);
+  --transition:0.18s ease;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;font-size:15px;background:var(--bg);color:var(--text);line-height:1.5;-webkit-font-smoothing:antialiased}
+::-webkit-scrollbar{width:5px;height:5px}
+::-webkit-scrollbar-track{background:var(--surface)}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:99px}
 
-  /* === Reset === */
-  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-  body {
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-    font-size: 15px;
-    background: var(--bg);
-    color: var(--text);
-    line-height: 1.5;
-    -webkit-font-smoothing: antialiased;
-  }
-  ::-webkit-scrollbar { width: 5px; height: 5px; }
-  ::-webkit-scrollbar-track { background: var(--surface); }
-  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 99px; }
+/* === HEADER === */
+.header{background:linear-gradient(180deg,#141414 0%,#0f0f0f 100%);border-bottom:1px solid var(--border);padding:0 2rem;display:flex;align-items:center;justify-content:space-between;height:76px;position:sticky;top:0;z-index:100;box-shadow:0 1px 0 rgba(255,255,255,0.03)}
+.header-logo{display:flex;align-items:center;gap:16px}
+.logo-mark{width:52px;height:52px;flex-shrink:0;display:flex;align-items:center;justify-content:center}
+.header-title{font-size:17px;font-weight:700;color:var(--text);letter-spacing:0.02em}
+.header-sub{font-size:10px;color:var(--gold);margin-top:2px;font-weight:600;letter-spacing:0.14em;text-transform:uppercase}
+.header-right{font-size:12px;color:var(--text2);display:flex;align-items:center;gap:10px}
+.header-count-badge{background:var(--gold-sub);color:var(--gold);border:1px solid rgba(201,168,76,0.22);font-size:12px;font-weight:600;padding:4px 14px;border-radius:20px;letter-spacing:0.02em}
 
-  /* === Header === */
-  .header {
-    background: var(--surface);
-    border-bottom: 1px solid var(--border);
-    padding: 0 2rem;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    height: 80px;
-    position: sticky;
-    top: 0;
-    z-index: 100;
-  }
-  .header-logo { display: flex; align-items: center; gap: 18px; }
-  .logo-mark {
-    width: 62px; height: 62px; flex-shrink: 0;
-    display: flex; align-items: center; justify-content: center;
-  }
-  .header-text {}
-  .header-title {
-    font-size: 18px; font-weight: 700; color: var(--text);
-    letter-spacing: 0.02em;
-  }
-  .header-sub {
-    font-size: 11px; color: var(--gold); margin-top: 3px;
-    font-weight: 500; letter-spacing: 0.12em; text-transform: uppercase;
-  }
-  .header-right {
-    font-size: 12px; color: var(--text2);
-    display: flex; align-items: center; gap: 8px;
-  }
-  .header-count-badge {
-    background: var(--gold-sub); color: var(--gold);
-    border: 1px solid rgba(201,168,76,0.2);
-    font-size: 12px; font-weight: 600;
-    padding: 4px 12px; border-radius: 20px;
-  }
+/* === SYNC BADGE === */
+.sync-badge{display:inline-flex;align-items:center;gap:5px;font-size:10px;font-weight:500;letter-spacing:0.02em;padding:3px 10px;border-radius:20px;transition:all 0.3s ease;white-space:nowrap}
+.sync-dot{width:6px;height:6px;border-radius:50%;display:inline-block;flex-shrink:0}
+.sync-ok{background:rgba(82,183,136,0.08);color:#52b788;border:1px solid rgba(82,183,136,0.2)}.sync-ok .sync-dot{background:#52b788}
+.sync-syncing{background:var(--gold-sub);color:var(--gold);border:1px solid rgba(201,168,76,0.2)}.sync-syncing .sync-dot{background:var(--gold);animation:syncpulse 1s ease infinite}
+.sync-error{background:var(--urgent-bg);color:var(--urgent);border:1px solid rgba(224,82,82,0.2)}.sync-error .sync-dot{background:var(--urgent)}
+.sync-offline{background:var(--surface2);color:var(--text3);border:1px solid var(--border)}.sync-offline .sync-dot{background:var(--text3)}
+@keyframes syncpulse{0%,100%{opacity:1}50%{opacity:0.3}}
 
-  /* === Sync Badge === */
-  .sync-badge {
-    display: inline-flex; align-items: center; gap: 5px;
-    font-size: 10px; font-weight: 500; letter-spacing: 0.02em;
-    padding: 3px 10px; border-radius: 20px;
-    transition: all 0.3s ease; white-space: nowrap;
-  }
-  .sync-dot {
-    width: 6px; height: 6px; border-radius: 50%;
-    display: inline-block; flex-shrink: 0;
-  }
-  .sync-ok      { background: rgba(82,183,136,0.08); color: #52b788; border: 1px solid rgba(82,183,136,0.2); }
-  .sync-ok .sync-dot      { background: #52b788; }
-  .sync-syncing { background: var(--gold-sub); color: var(--gold); border: 1px solid rgba(201,168,76,0.2); }
-  .sync-syncing .sync-dot { background: var(--gold); animation: syncpulse 1s ease infinite; }
-  .sync-error   { background: var(--urgent-bg); color: var(--urgent); border: 1px solid rgba(224,82,82,0.2); }
-  .sync-error .sync-dot   { background: var(--urgent); }
-  .sync-offline { background: var(--surface2); color: var(--text3); border: 1px solid var(--border); }
-  .sync-offline .sync-dot { background: var(--text3); }
-  @keyframes syncpulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+/* === CONTAINER === */
+.container{max-width:1520px;margin:0 auto;padding:1.5rem 2rem}
 
-  /* === Nav Tabs === */
-  .nav-tabs {
-    background: var(--surface);
-    border-bottom: 1px solid var(--border2);
-    display: flex;
-    padding: 0 2rem;
-    gap: 0;
-  }
-  .nav-tab {
-    padding: 0 22px;
-    height: 48px;
-    font-size: 13.5px;
-    font-weight: 500;
-    color: var(--text2);
-    border: none;
-    background: transparent;
-    cursor: pointer;
-    border-bottom: 2px solid transparent;
-    transition: color var(--transition), border-color var(--transition);
-    letter-spacing: 0.03em;
-    text-transform: uppercase;
-    display: flex; align-items: center; gap: 7px;
-  }
-  .nav-tab svg { opacity: 0.5; transition: opacity var(--transition); }
-  .nav-tab:hover { color: var(--text); }
-  .nav-tab:hover svg { opacity: 0.8; }
-  .nav-tab.active { color: var(--gold); border-bottom-color: var(--gold); }
-  .nav-tab.active svg { opacity: 1; }
+/* === STATS === */
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(125px,1fr));gap:10px;margin-bottom:1.25rem}
+.stat{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:.9rem 1.2rem;transition:border-color var(--transition),transform var(--transition),box-shadow var(--transition);position:relative;overflow:hidden;cursor:pointer}
+.stat::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:var(--border);transition:background var(--transition)}
+.stat:hover{border-color:rgba(201,168,76,0.2);transform:translateY(-1px);box-shadow:var(--shadow-sm)}
+.stat-n{font-size:26px;font-weight:700;line-height:1.1;color:var(--text)}
+.stat-l{font-size:10px;color:var(--text2);margin-top:5px;font-weight:700;letter-spacing:0.07em;text-transform:uppercase}
+.n-urg{color:#f07070}.stat:has(.n-urg)::before{background:#f07070}
+.n-aij{color:var(--gold)}.stat:has(.n-aij)::before{background:var(--gold)}
+.n-ok{color:var(--ok)}.stat:has(.n-ok)::before{background:var(--ok)}
+.n-atencao{color:#d4894a}.stat:has(.n-atencao)::before{background:#d4894a}
 
-  /* === Container === */
-  .container { max-width: 1440px; margin: 0 auto; padding: 1.5rem 2rem; }
+/* === TOOLBAR === */
+.toolbar{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:.8rem 1.2rem;margin-bottom:1rem;display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.filters{display:flex;gap:5px;flex-wrap:wrap;flex:1}
+.filter-btn{font-size:11.5px;font-weight:600;padding:5px 13px;border-radius:20px;border:1px solid var(--border);background:transparent;color:var(--text2);cursor:pointer;transition:all var(--transition);letter-spacing:0.02em;white-space:nowrap}
+.filter-btn:hover{border-color:var(--text3);color:var(--text)}
+.filter-btn.active{background:var(--gold-sub);color:var(--gold);border-color:rgba(201,168,76,0.35)}
+.search{position:relative}
+.search input{background:var(--surface2);border:1px solid var(--border);color:var(--text);font-size:13px;padding:7px 14px 7px 32px;border-radius:var(--r-sm);outline:none;width:270px;font-family:inherit;transition:border-color var(--transition)}
+.search input:focus{border-color:var(--gold-dk)}
+.search input::placeholder{color:var(--text3)}
+.search-icon{position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--text3);font-size:14px;pointer-events:none}
+.btn-icon{background:var(--surface2);border:1px solid var(--border);color:var(--text2);padding:7px 12px;border-radius:var(--r-sm);cursor:pointer;font-size:12px;font-weight:500;transition:all var(--transition)}
+.btn-icon:hover{border-color:var(--border2);color:var(--text);background:var(--surface3)}
 
-  /* === Stats === */
-  .stats {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-    gap: 10px;
-    margin-bottom: 1.25rem;
-  }
-  .stat {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: var(--r);
-    padding: 1rem 1.25rem;
-    transition: border-color var(--transition), transform var(--transition);
-    position: relative;
-    overflow: hidden;
-  }
-  .stat::before {
-    content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px;
-    background: var(--border); transition: background var(--transition);
-  }
-  .stat:hover { border-color: var(--border2); transform: translateY(-1px); }
-  .stat-n { font-size: 28px; font-weight: 700; line-height: 1.1; color: var(--text); }
-  .stat-l { font-size: 13px; color: var(--text2); margin-top: 5px; font-weight: 500; letter-spacing: 0.03em; text-transform: uppercase; }
-  .n-urg { color: var(--urgent); }
-  .n-urg ~ .stat-l { }
-  .stat:has(.n-urg)::before { background: var(--urgent); }
-  .n-aij { color: var(--gold); }
-  .stat:has(.n-aij)::before { background: var(--gold); }
-  .n-ok  { color: var(--ok); }
-  .stat:has(.n-ok)::before { background: var(--ok); }
+/* === TABLE === */
+.table-wrap{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);overflow:hidden}
+table{width:100%;border-collapse:collapse}
+thead tr{background:#131313;border-bottom:1px solid var(--border)}
+th{padding:10px 13px;text-align:left;font-size:10px;font-weight:700;color:var(--text3);letter-spacing:0.1em;text-transform:uppercase;white-space:nowrap}
+tbody tr{border-bottom:1px solid var(--border2);transition:background var(--transition)}
+tbody tr:last-child{border-bottom:none}
+tbody tr:hover{background:rgba(255,255,255,0.014)}
+tbody tr.row-urgente{border-left:2px solid #e05252}
+tbody tr.row-aij{border-left:2px solid var(--gold)}
+tbody tr.row-atencao{border-left:2px solid #e67e22}
+td{padding:11px 13px;vertical-align:top}
 
-  /* === Toolbar === */
-  .toolbar {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: var(--r);
-    padding: .875rem 1.25rem;
-    margin-bottom: 1rem;
-    display: flex; gap: 10px; flex-wrap: wrap; align-items: center;
-  }
-  .filters { display: flex; gap: 6px; flex-wrap: wrap; flex: 1; }
-  .filter-btn {
-    font-size: 13px; font-weight: 500;
-    padding: 5px 14px; border-radius: 20px;
-    border: 1px solid var(--border);
-    background: transparent; color: var(--text2);
-    cursor: pointer;
-    transition: all var(--transition);
-    letter-spacing: 0.02em;
-  }
-  .filter-btn:hover { border-color: var(--text3); color: var(--text); }
-  .filter-btn.active {
-    background: var(--gold-sub);
-    color: var(--gold);
-    border-color: rgba(201,168,76,0.25);
-  }
-  .search input {
-    font-size: 13px;
-    padding: 7px 16px 7px 36px;
-    border-radius: 20px;
-    border: 1px solid var(--border);
-    min-width: 240px;
-    background: var(--surface2);
-    color: var(--text);
-    font-family: inherit;
-    outline: none;
-    transition: border-color var(--transition), background var(--transition);
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%23666' stroke-width='2'%3E%3Ccircle cx='11' cy='11' r='8'/%3E%3Cpath d='m21 21-4.35-4.35'/%3E%3C/svg%3E");
-    background-repeat: no-repeat;
-    background-position: 12px center;
-  }
-  .search input:focus { border-color: var(--gold-dk); background: var(--surface3); }
-  .search input::placeholder { color: var(--text3); }
+/* === STATUS BADGES === */
+.st-badges{display:flex;flex-wrap:wrap;gap:3px;align-items:flex-start}
+.badge{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;padding:3px 9px;border-radius:20px;white-space:nowrap;letter-spacing:0.03em}
+.badge-dot{width:5px;height:5px;border-radius:50%;flex-shrink:0}
+.b-urgente{background:rgba(224,82,82,0.12);color:#f07070;border:1px solid rgba(224,82,82,0.22)}.b-urgente .badge-dot{background:#f07070}
+.b-aij{background:rgba(201,168,76,0.12);color:var(--gold-lt);border:1px solid rgba(201,168,76,0.28)}.b-aij .badge-dot{background:var(--gold)}
+.b-atencao{background:rgba(230,126,34,0.12);color:#d4894a;border:1px solid rgba(230,126,34,0.22)}.b-atencao .badge-dot{background:#d4894a}
+.b-aguardando{background:var(--surface3);color:var(--text2);border:1px solid var(--border)}.b-aguardando .badge-dot{background:var(--text3)}
+.b-encerrado{background:rgba(82,183,136,0.10);color:#62c795;border:1px solid rgba(82,183,136,0.22)}.b-encerrado .badge-dot{background:#62c795}
+.b-favoravel{background:rgba(82,183,136,0.10);color:#52b788;border:1px solid rgba(82,183,136,0.22)}.b-favoravel .badge-dot{background:#52b788}
 
-  /* === Table === */
-  .table-wrap {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: var(--r);
-    overflow: hidden;
-  }
-  table { width: 100%; border-collapse: collapse; font-size: 14.5px; }
-  thead th {
-    background: var(--surface2);
-    font-size: 12px;
-    font-weight: 600;
-    color: var(--text2);
-    text-align: left;
-    padding: 11px 14px;
-    border-bottom: 1px solid var(--border);
-    text-transform: uppercase;
-    letter-spacing: 0.07em;
-    white-space: nowrap;
-  }
-  tbody tr {
-    border-bottom: 1px solid var(--border2);
-    transition: background var(--transition);
-  }
-  tbody tr:last-child { border-bottom: none; }
-  tbody tr:hover { background: var(--surface2); }
-  /* Linha urgente tem acento lateral */
-  tbody tr.row-urgente { border-left: 2px solid var(--urgent); }
-  tbody tr.row-aij     { border-left: 2px solid var(--gold); }
-  tbody tr.row-ok      { border-left: 2px solid var(--ok); }
-  td { padding: 13px 14px; vertical-align: top; }
+/* === STATUS PICKER === */
+.st-wrap{position:relative;display:inline-block}
+.st-pick-btn{background:none;border:1px dashed rgba(201,168,76,0.3);color:var(--text3);width:20px;height:20px;border-radius:50%;cursor:pointer;font-size:11px;display:inline-flex;align-items:center;justify-content:center;transition:all var(--transition);line-height:1;padding:0;vertical-align:middle;margin-left:3px}
+.st-pick-btn:hover{border-color:var(--gold);color:var(--gold);background:var(--gold-sub)}
+.st-picker{display:none;position:absolute;top:calc(100% + 5px);left:0;z-index:600;background:var(--surface2);border:1px solid var(--border);border-radius:var(--r);box-shadow:var(--shadow);padding:6px;min-width:195px}
+.st-picker.open{display:block;animation:fadeIn .14s ease}
+@keyframes fadeIn{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:translateY(0)}}
+.st-picker-title{font-size:9.5px;font-weight:700;color:var(--text3);letter-spacing:0.1em;text-transform:uppercase;padding:4px 10px 7px;margin-bottom:2px;border-bottom:1px solid var(--border2)}
+.st-opt{display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:var(--r-sm);cursor:pointer;font-size:12.5px;font-weight:600;transition:background var(--transition);white-space:nowrap;color:var(--text)}
+.st-opt:hover{background:var(--surface3)}
+.st-check{width:14px;height:14px;border-radius:3px;border:1.5px solid var(--border);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:900;transition:all var(--transition)}
+.st-opt.checked .st-check{background:var(--gold);border-color:var(--gold);color:#000}
+.dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+.st-sep{border:none;border-top:1px solid var(--border);margin:4px 0}
+.st-restore{font-size:11px;color:var(--text2);padding:6px 10px;cursor:pointer;border-radius:var(--r-sm);transition:all var(--transition)}
+.st-restore:hover{background:var(--surface3);color:var(--urgent)}
+.st-manual-dot{display:inline-block;width:5px;height:5px;background:var(--gold);border-radius:50%;margin-left:3px;vertical-align:middle;opacity:0.7}
 
-  /* === Badges de status === */
-  .badge {
-    display: inline-flex; align-items: center; gap: 4px;
-    font-size: 12px; font-weight: 600;
-    padding: 3px 10px; border-radius: 20px;
-    white-space: nowrap; letter-spacing: 0.03em;
-  }
-  .b-urgente  { background: var(--urgent-bg);  color: #f07070; border: 1px solid rgba(224,82,82,0.18); }
-  .b-aij      { background: var(--gold-sub);    color: var(--gold-lt); border: 1px solid rgba(201,168,76,0.2); }
-  .b-atencao  { background: rgba(230,126,34,0.10); color: #d4894a; border: 1px solid rgba(230,126,34,0.18); }
-  .b-aguardando { background: var(--surface3);  color: var(--text2); border: 1px solid var(--border); }
-  .b-encerrado  { background: var(--ok-bg);     color: #62c795; border: 1px solid rgba(82,183,136,0.18); }
-  .b-favoravel  { background: var(--ok-bg);     color: #62c795; border: 1px solid rgba(82,183,136,0.18); }
-  .b-deolho     { background: rgba(91,156,246,0.10); color: var(--blue); border: 1px solid rgba(91,156,246,0.18); }
+/* === TIPO & SISTEMA === */
+.tipo-c{color:#6aacf0;font-size:10px;font-weight:700;background:rgba(91,156,246,0.12);padding:2px 7px;border-radius:4px;letter-spacing:0.03em}
+.tipo-cv{color:#62c795;font-size:10px;font-weight:700;background:rgba(82,183,136,0.12);padding:2px 7px;border-radius:4px;letter-spacing:0.03em}
+.sys-badge{display:block;margin-top:4px;font-size:9.5px;font-weight:600;padding:2px 7px;border-radius:4px;white-space:nowrap;letter-spacing:0.02em}
+.sys-tjrj{background:var(--purple-bg);color:var(--purple)}
+.sys-jf{background:var(--gold-sub);color:var(--gold)}
+.sys-tjro{background:var(--urgent-bg);color:#f07070}
+.sys-tjsp{background:var(--ok-bg);color:#62c795}
+.sys-pdpj{background:var(--blue-bg);color:var(--blue)}
+.sys-proj{background:var(--warn-bg);color:#d4894a}
+.sys-del{background:var(--surface3);color:var(--text2)}
+.sys-eleit{background:rgba(236,72,153,0.10);color:#f472b6}
 
-  /* === Status picker === */
-  .st-wrap { position: relative; display: inline-block; }
-  .st-click { cursor: pointer; user-select: none; transition: opacity var(--transition); }
-  .st-click:hover { opacity: 0.78; }
-  .st-arrow { font-size: 7px; margin-left: 2px; opacity: 0.5; }
-  .st-manual-dot { display: inline-block; width: 5px; height: 5px; background: var(--blue); border-radius: 50%; margin-left: 3px; vertical-align: middle; }
-  .st-picker {
-    display: none; position: absolute; top: calc(100% + 6px); left: 0; z-index: 600;
-    background: var(--surface2);
-    border: 1px solid var(--border);
-    border-radius: var(--r-sm);
-    box-shadow: var(--shadow);
-    padding: 5px; min-width: 160px;
-  }
-  .st-picker.open { display: block; animation: fadeIn .12s ease; }
-  @keyframes fadeIn { from { opacity:0; transform:translateY(-4px) } to { opacity:1; transform:translateY(0) } }
-  .st-opt {
-    display: flex; align-items: center; gap: 8px;
-    padding: 7px 10px; border-radius: 5px;
-    cursor: pointer; font-size: 12px; font-weight: 600;
-    transition: background var(--transition); white-space: nowrap; color: var(--text);
-  }
-  .st-opt:hover { background: var(--surface3); }
-  .st-opt .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
-  .st-sep { border: none; border-top: 1px solid var(--border); margin: 4px 0; }
-  .st-restore { font-size: 11px; color: var(--text2); padding: 6px 10px; cursor: pointer; border-radius: 5px; transition: all var(--transition); }
-  .st-restore:hover { background: var(--surface3); color: var(--urgent); }
+/* === EDITABLE CELLS === */
+.editable-cell{cursor:pointer;border-radius:var(--r-sm);transition:background var(--transition);position:relative}
+.editable-cell:hover{background:rgba(201,168,76,0.04)}
+.edit-hint{font-size:9px;color:var(--gold-dk);opacity:0;transition:opacity var(--transition);margin-left:4px;vertical-align:middle}
+.editable-cell:hover .edit-hint{opacity:0.7}
+.override-dot{display:inline-block;width:5px;height:5px;background:var(--gold);border-radius:50%;margin-left:4px;vertical-align:middle;opacity:0.8}
+.edit-box{width:100%;min-height:64px;font-size:12.5px;font-family:inherit;border:1.5px solid var(--gold-dk);border-radius:var(--r-sm);padding:7px 10px;resize:vertical;line-height:1.6;color:var(--text);outline:none;background:var(--surface2)}
+.edit-box-inline{width:100%;font-size:13px;font-family:inherit;border:1.5px solid var(--gold-dk);border-radius:var(--r-sm);padding:5px 9px;line-height:1.5;color:var(--text);outline:none;background:var(--surface2)}
+.edit-actions{display:flex;gap:6px;margin-top:5px;flex-wrap:wrap}
+.edit-save{font-size:11px;padding:4px 12px;background:var(--gold);color:#0a0a0a;border:none;border-radius:var(--r-sm);cursor:pointer;font-weight:700;transition:opacity var(--transition)}
+.edit-save:hover{opacity:0.85}
+.edit-cancel{font-size:11px;padding:4px 11px;background:var(--surface3);color:var(--text2);border:1px solid var(--border);border-radius:var(--r-sm);cursor:pointer;transition:all var(--transition)}
+.edit-cancel:hover{color:var(--text)}
+.edit-clear{font-size:11px;padding:4px 11px;background:transparent;color:var(--urgent);border:1px solid rgba(224,82,82,0.25);border-radius:var(--r-sm);cursor:pointer;transition:all var(--transition)}
+.edit-clear:hover{background:var(--urgent-bg)}
 
-  /* === Tipo & Sistema === */
-  .tipo-c  { color: #6aacf0; font-size: 10px; font-weight: 700; background: rgba(91,156,246,0.12); padding: 2px 7px; border-radius: 4px; letter-spacing: 0.03em; }
-  .tipo-cv { color: #62c795; font-size: 10px; font-weight: 700; background: rgba(82,183,136,0.12); padding: 2px 7px; border-radius: 4px; letter-spacing: 0.03em; }
-  .sys-badge { display: block; margin-top: 5px; font-size: 10px; font-weight: 600; padding: 2px 7px; border-radius: 4px; white-space: nowrap; letter-spacing: 0.02em; }
-  .sys-tjrj  { background: rgba(139,92,246,0.12); color: #a78bfa; }
-  .sys-jf    { background: rgba(201,168,76,0.10); color: var(--gold); }
-  .sys-tjro  { background: rgba(224,82,82,0.10);  color: #f07070; }
-  .sys-tjsp  { background: rgba(82,183,136,0.10); color: #62c795; }
-  .sys-pdpj  { background: rgba(91,156,246,0.10); color: var(--blue); }
-  .sys-proj  { background: rgba(230,126,34,0.10); color: #d4894a; }
-  .sys-del   { background: var(--surface3); color: var(--text2); }
-  .sys-eleit { background: rgba(236,72,153,0.10); color: #f472b6; }
+/* === TEXT CELLS === */
+.proc-num{font-size:11.5px;color:var(--text2);font-family:'SF Mono','Consolas',monospace;line-height:1.7;word-break:break-all}
+.res-urg{color:#f07070;font-size:13px;line-height:1.6}
+.res-norm{color:var(--text);font-size:13px;line-height:1.6}
+.prox-text{font-size:13px;color:var(--text2);line-height:1.6}
+.ver-text{font-size:11.5px;color:var(--text3);white-space:nowrap}
+.empty{padding:4rem;text-align:center;color:var(--text3);font-size:14px}
+.count-info{font-size:11.5px;color:var(--text3);padding:.7rem 1.2rem;border-top:1px solid var(--border2);background:var(--surface2);letter-spacing:0.03em}
 
-  /* === Texto das células === */
-  .proc-num  { font-size: 12px; color: var(--text2); font-family: 'SF Mono','Consolas',monospace; line-height: 1.6; word-break: break-all; }
-  .res-urg   { color: #f07070; font-size: 13.5px; line-height: 1.6; }
-  .res-norm  { color: var(--text); font-size: 13.5px; line-height: 1.6; }
-  .prox-text { font-size: 13.5px; color: var(--text2); line-height: 1.6; }
-  .ver-text  { font-size: 12px; color: var(--text3); white-space: nowrap; }
-
-  /* === Células editáveis === */
-  .editable-cell { cursor: pointer; border-radius: var(--r-sm); transition: background var(--transition); }
-  .editable-cell:hover { background: var(--surface3); }
-  .edit-hint { font-size: 10px; color: var(--gold-dk); opacity: 0; transition: opacity var(--transition); margin-left: 5px; }
-  .editable-cell:hover .edit-hint { opacity: 1; }
-  .override-dot { display: inline-block; width: 6px; height: 6px; background: var(--gold); border-radius: 50%; margin-left: 5px; vertical-align: middle; }
-  .edit-box {
-    width: 100%; min-height: 72px;
-    font-size: 12px; font-family: inherit;
-    border: 1.5px solid var(--gold-dk); border-radius: var(--r-sm);
-    padding: 8px 10px; resize: vertical; line-height: 1.6;
-    color: var(--text); outline: none;
-    background: var(--surface2);
-  }
-  .edit-actions { display: flex; gap: 6px; margin-top: 6px; flex-wrap: wrap; }
-  .edit-save   { font-size: 11px; padding: 4px 14px; background: var(--gold); color: #0a0a0a; border: none; border-radius: var(--r-sm); cursor: pointer; font-weight: 700; transition: opacity var(--transition); }
-  .edit-save:hover { opacity: 0.85; }
-  .edit-cancel { font-size: 11px; padding: 4px 12px; background: var(--surface3); color: var(--text2); border: 1px solid var(--border); border-radius: var(--r-sm); cursor: pointer; transition: all var(--transition); }
-  .edit-cancel:hover { color: var(--text); }
-  .edit-clear  { font-size: 11px; padding: 4px 12px; background: transparent; color: var(--urgent); border: 1px solid rgba(224,82,82,0.25); border-radius: var(--r-sm); cursor: pointer; transition: all var(--transition); }
-  .edit-clear:hover { background: var(--urgent-bg); }
-
-  /* === Misc === */
-  .empty { padding: 4rem; text-align: center; color: var(--text3); font-size: 14px; }
-  .count-info { font-size: 12px; color: var(--text3); padding: 0.75rem 1.25rem; border-top: 1px solid var(--border2); background: var(--surface2); letter-spacing: 0.03em; }
-  .section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.25rem; }
-  .section-title { font-size: 16px; font-weight: 700; color: var(--text); letter-spacing: 0.02em; }
-  .section-title span { color: var(--text2); font-weight: 400; font-size: 14px; margin-left: 8px; }
-
-  /* === Botões === */
-  .btn-primary {
-    font-size: 12px; font-weight: 600; font-family: inherit;
-    padding: 8px 18px;
-    background: var(--gold);
-    color: #0a0a0a;
-    border: none; border-radius: var(--r-sm);
-    cursor: pointer;
-    transition: opacity var(--transition), transform var(--transition);
-    letter-spacing: 0.03em;
-  }
-  .btn-primary:hover { opacity: 0.88; transform: translateY(-1px); }
-  .btn-primary:active { transform: translateY(0); }
-  .btn-ghost {
-    font-size: 12px; font-weight: 500; font-family: inherit;
-    padding: 7px 15px;
-    background: transparent; color: var(--text2);
-    border: 1px solid var(--border); border-radius: var(--r-sm);
-    cursor: pointer;
-    transition: all var(--transition);
-  }
-  .btn-ghost:hover { border-color: var(--text3); color: var(--text); }
-
-  /* === Kanban === */
-  .kanban-board { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; align-items: start; }
-  .kanban-col {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: var(--r);
-    padding: 14px;
-    min-height: 240px;
-    transition: border-color var(--transition);
-  }
-  .kanban-col.drag-over { border-color: var(--gold-dk); background: var(--gold-sub2); }
-  .kanban-col-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; padding: 0 2px; }
-  .kanban-col-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text2); }
-  .col-aguardando .kanban-col-title { color: var(--text3); }
-  .col-fazendo    .kanban-col-title { color: var(--blue); }
-  .col-feito      .kanban-col-title { color: var(--ok); }
-  .kanban-col-count { font-size: 10px; font-weight: 700; background: var(--surface3); color: var(--text2); padding: 2px 8px; border-radius: 10px; }
-  .kanban-card {
-    background: var(--surface2);
-    border: 1px solid var(--border);
-    border-radius: var(--r-sm);
-    padding: 13px 14px;
-    margin-bottom: 8px;
-    cursor: grab;
-    transition: border-color var(--transition), box-shadow var(--transition), transform var(--transition);
-  }
-  .kanban-card:hover { border-color: var(--border); box-shadow: 0 4px 16px rgba(0,0,0,0.3); transform: translateY(-1px); }
-  .kanban-card:active { cursor: grabbing; transform: scale(0.98); }
-  .kanban-card.dragging { opacity: 0.4; }
-  .card-title { font-size: 14px; font-weight: 600; color: var(--text); margin-bottom: 5px; line-height: 1.45; }
-  .card-desc { font-size: 12.5px; color: var(--text2); line-height: 1.55; margin-bottom: 10px; }
-  .card-footer { display: flex; align-items: center; justify-content: space-between; gap: 6px; flex-wrap: wrap; }
-  .card-resp { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 600; padding: 3px 9px; border-radius: 12px; white-space: nowrap; }
-  .resp-v { background: rgba(91,156,246,0.12); color: var(--blue); }
-  .resp-s { background: rgba(167,139,250,0.12); color: #a78bfa; }
-  .card-actions { display: flex; gap: 5px; align-items: center; }
-  .card-date { font-size: 11px; color: var(--text3); margin-right: 2px; }
-  .card-btn { font-size: 12px; padding: 4px 9px; border: 1px solid var(--border); background: var(--surface3); border-radius: 4px; cursor: pointer; color: var(--text2); transition: all var(--transition); line-height: 1; }
-  .card-btn:hover { border-color: var(--text3); color: var(--text); }
-  .card-btn.del:hover { background: var(--urgent-bg); border-color: rgba(224,82,82,0.25); color: var(--urgent); }
-  .col-empty { text-align: center; padding: 28px 12px; color: var(--text3); font-size: 13px; }
-
-  /* === Modal === */
-  .modal-overlay {
-    display: none; position: fixed; inset: 0;
-    background: rgba(0,0,0,0.72);
-    z-index: 1000; align-items: center; justify-content: center;
-    backdrop-filter: blur(4px);
-  }
-  .modal-overlay.open { display: flex; }
-  .modal {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: var(--r-lg);
-    padding: 28px;
-    width: 500px; max-width: 95vw;
-    box-shadow: var(--shadow);
-    animation: slideUp .2s ease;
-  }
-  @keyframes slideUp { from { opacity:0; transform:translateY(12px) } to { opacity:1; transform:translateY(0) } }
-  .modal-title { font-size: 17px; font-weight: 700; color: var(--text); margin-bottom: 22px; }
-  .modal-title::after { content:''; display:block; width:28px; height:2px; background:var(--gold); margin-top:8px; border-radius:2px; }
-  .form-group { margin-bottom: 15px; }
-  .form-label { display: block; font-size: 11px; font-weight: 700; color: var(--text2); margin-bottom: 7px; text-transform: uppercase; letter-spacing: 0.08em; }
-  .form-input {
-    width: 100%; font-size: 14px; padding: 10px 13px;
-    border: 1px solid var(--border); border-radius: var(--r-sm);
-    font-family: inherit; outline: none;
-    transition: border-color var(--transition);
-    background: var(--surface2); color: var(--text);
-  }
-  .form-input:focus { border-color: var(--gold-dk); }
-  .form-input option { background: var(--surface2); }
-  .form-textarea { min-height: 80px; resize: vertical; }
-  .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-  .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 24px; }
-  .email-note { font-size: 11px; color: var(--text2); margin-top: 10px; padding: 10px 13px; background: var(--gold-sub2); border-radius: var(--r-sm); border-left: 3px solid var(--gold-dk); line-height: 1.6; }
-
-  /* === Agenda === */
-  .agenda-nav { display: flex; align-items: center; gap: 10px; }
-  .week-label { font-size: 14px; font-weight: 600; color: var(--text); min-width: 220px; text-align: center; }
-  .nav-btn {
-    width: 32px; height: 32px;
-    background: var(--surface2); border: 1px solid var(--border);
-    border-radius: var(--r-sm); cursor: pointer; font-size: 18px;
-    display: flex; align-items: center; justify-content: center;
-    color: var(--text2); transition: all var(--transition);
-  }
-  .nav-btn:hover { border-color: var(--text3); color: var(--text); }
-  .agenda-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px; }
-  .agenda-day {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: var(--r);
-    min-height: 150px;
-    overflow: hidden;
-    transition: border-color var(--transition);
-  }
-  .agenda-day:hover { border-color: var(--border2); }
-  .agenda-day-header {
-    padding: 10px 12px 8px;
-    border-bottom: 1px solid var(--border2);
-    cursor: pointer; user-select: none;
-    transition: background var(--transition);
-  }
-  .agenda-day-header:hover { background: var(--surface2); }
-  .agenda-day-name { font-size: 9px; font-weight: 700; text-transform: uppercase; color: var(--text3); letter-spacing: 0.1em; }
-  .agenda-day-num { font-size: 20px; font-weight: 700; color: var(--text); line-height: 1.3; }
-  .agenda-day.today .agenda-day-header { background: var(--gold-sub); }
-  .agenda-day.today .agenda-day-name { color: var(--gold-dk); }
-  .agenda-day.today .agenda-day-num { color: var(--gold); }
-  .agenda-day.today { border-color: rgba(201,168,76,0.25); }
-  .agenda-events { padding: 7px; }
-  .agenda-event {
-    position: relative;
-    background: rgba(91,156,246,0.08);
-    border-left: 2px solid var(--blue);
-    border-radius: 4px;
-    padding: 5px 22px 5px 8px;
-    margin-bottom: 4px;
-    transition: background var(--transition);
-  }
-  .agenda-event:hover { background: rgba(91,156,246,0.14); }
-  .agenda-event-time { font-size: 9px; font-weight: 700; color: var(--blue); letter-spacing: 0.04em; }
-  .agenda-event-title { font-size: 11px; color: var(--text); line-height: 1.4; }
-  .agenda-event-local { font-size: 10px; color: var(--text2); margin-top: 2px; line-height: 1.4; }
-  .agenda-event-del { position: absolute; top: 4px; right: 5px; background: none; border: none; color: var(--text3); cursor: pointer; font-size: 11px; line-height: 1; padding: 0; opacity: 0; transition: opacity var(--transition); }
-  .agenda-event:hover .agenda-event-del { opacity: 1; }
-  .agenda-add-hint { text-align: center; font-size: 11px; color: var(--text3); padding: 12px 8px; }
-
-  /* === Responsive / Mobile === */
-  @media (max-width: 768px) {
-    .header { padding: 0 1rem; }
-    .header-sub { display: none; }
-    .nav-tabs { padding: 0 1rem; overflow-x: auto; }
-    .nav-tab { padding: 0 14px; font-size: 11px; white-space: nowrap; }
-    .container { padding: 1rem; }
-    .stats { grid-template-columns: repeat(3, 1fr); gap: 8px; }
-    .stat-n { font-size: 20px; }
-    .toolbar { flex-direction: column; align-items: stretch; gap: 8px; }
-    .search input { min-width: unset; width: 100%; }
-    .table-wrap { overflow-x: auto; }
-    table { min-width: 700px; }
-    .kanban-board { grid-template-columns: 1fr; }
-    .agenda-grid { grid-template-columns: repeat(7, minmax(100px, 1fr)); overflow-x: auto; }
-    .form-row { grid-template-columns: 1fr; }
-    .modal { padding: 20px; }
-  }
-  @media (max-width: 480px) {
-    .stats { grid-template-columns: repeat(2, 1fr); }
-    .header-count-badge { display: none; }
-  }
-
-  @media print {
-    body { background: white; color: black; }
-    .nav-tabs, .toolbar, .modal-overlay, .header-right { display: none; }
-    .header { background: white; border-bottom: 1px solid #ddd; }
-    .table-wrap, .stat { border: 1px solid #ddd; background: white; }
-  }
-
-  /* === ABA PUBLICAÇÕES === */
-  .pub-toolbar {
-    display: flex; gap: 10px; flex-wrap: wrap;
-    align-items: center; margin-bottom: 16px;
-  }
-  .pub-filters { display: flex; gap: 6px; flex-wrap: wrap; flex: 1; }
-  .pub-badge-count {
-    font-size: 11px; background: var(--surface2);
-    color: var(--text2); padding: 2px 8px;
-    border-radius: 10px; margin-left: auto;
-  }
-  .pub-table-wrap {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: var(--r);
-    overflow: hidden;
-  }
-  .pub-table { width: 100%; border-collapse: collapse; font-size: 14px; }
-  .pub-table thead th {
-    background: var(--surface2);
-    padding: 10px 14px;
-    text-align: left;
-    font-size: 11px; font-weight: 600;
-    text-transform: uppercase; letter-spacing: 0.07em;
-    color: var(--text2);
-    border-bottom: 1px solid var(--border2);
-  }
-  .pub-table tbody tr {
-    border-bottom: 1px solid var(--border);
-    transition: background var(--transition);
-  }
-  .pub-table tbody tr:last-child { border-bottom: none; }
-  .pub-table tbody tr:hover { background: var(--surface2); }
-  .pub-table tbody tr.pub-nao-lida { background: rgba(201,168,76,0.04); }
-  .pub-table tbody tr.pub-nao-lida:hover { background: rgba(201,168,76,0.08); }
-  .pub-table td { padding: 11px 14px; vertical-align: top; }
-  .pub-tipo-pill {
-    display: inline-block;
-    font-size: 10px; font-weight: 700;
-    padding: 2px 8px; border-radius: 10px;
-    text-transform: uppercase; letter-spacing: 0.04em;
-    white-space: nowrap;
-  }
-  .pub-tipo-dje { background: rgba(52,152,219,0.15); color: #5dade2; }
-  .pub-tipo-de  { background: rgba(155,89,182,0.15); color: #bb8fce; }
-  .pub-tipo-pje { background: rgba(39,174,96,0.15);  color: #58d68d; }
-  .pub-status-dot {
-    display: inline-block; width: 8px; height: 8px;
-    border-radius: 50%; margin-right: 6px;
-    vertical-align: middle;
-  }
-  .pub-nao-lida .pub-status-dot { background: var(--gold); }
-  .pub-lida .pub-status-dot { background: var(--text3); }
-  .pub-assunto { font-weight: 500; color: var(--text); line-height: 1.4; }
-  .pub-cliente { font-size: 12px; color: var(--gold); margin-top: 2px; }
-  .pub-proc { font-size: 11px; color: var(--text3); font-family: monospace; margin-top: 2px; }
-  .pub-data { font-size: 12px; color: var(--text2); white-space: nowrap; }
-  .pub-mark-btn {
-    font-size: 11px; color: var(--text3);
-    background: none; border: 1px solid var(--border2);
-    border-radius: var(--r-sm); padding: 3px 8px;
-    cursor: pointer; transition: all var(--transition);
-  }
-  .pub-mark-btn:hover { border-color: var(--gold); color: var(--gold); }
-  .pub-empty {
-    text-align: center; padding: 48px 20px;
-    color: var(--text3); font-size: 14px;
-  }
-  .pub-atualizado {
-    font-size: 11px; color: var(--text3);
-    text-align: right; margin-top: 8px;
-  }
+@media(max-width:900px){
+  .container{padding:1rem}.header{padding:0 1rem;height:64px}
+  .search input{width:200px}.stats{grid-template-columns:repeat(auto-fit,minmax(110px,1fr))}
+}
+@media print{.toolbar,.header-right,.st-pick-btn,.edit-hint{display:none}.header{position:static}}
 </style>
 </head>
 <body>
-
 <div class="header">
   <div class="header-logo">
     <div class="logo-mark">
-      <svg viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" width="62" height="62">
-        <defs>
-          <linearGradient id="gld" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stop-color="#f7e89a"/>
-            <stop offset="30%" stop-color="#e0c060"/>
-            <stop offset="60%" stop-color="#c9a84c"/>
-            <stop offset="100%" stop-color="#8a6820"/>
-          </linearGradient>
-          <linearGradient id="slv" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stop-color="#f0f0f0"/>
-            <stop offset="45%" stop-color="#c8c8c8"/>
-            <stop offset="100%" stop-color="#808080"/>
-          </linearGradient>
-          <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stop-color="#141414"/>
-            <stop offset="100%" stop-color="#0a0a0a"/>
-          </linearGradient>
-          <filter id="glow">
-            <feGaussianBlur stdDeviation="1.5" result="blur"/>
-            <feComposite in="SourceGraphic" in2="blur" operator="over"/>
-          </filter>
-        </defs>
-        <!-- Background -->
-        <rect width="80" height="80" rx="14" fill="url(#bgGrad)"/>
-        <!-- Outer border ornament -->
-        <rect x="3" y="3" width="74" height="74" rx="11" fill="none" stroke="url(#gld)" stroke-width="0.7" opacity="0.5"/>
-        <rect x="5" y="5" width="70" height="70" rx="9" fill="none" stroke="url(#gld)" stroke-width="0.3" opacity="0.25"/>
-        <!-- Corner ornaments -->
-        <circle cx="10" cy="10" r="1.5" fill="#c9a84c" opacity="0.4"/>
-        <circle cx="70" cy="10" r="1.5" fill="#c9a84c" opacity="0.4"/>
-        <circle cx="10" cy="70" r="1.5" fill="#c9a84c" opacity="0.4"/>
-        <circle cx="70" cy="70" r="1.5" fill="#c9a84c" opacity="0.4"/>
-        <!-- V in gold (dominant, large serif) -->
-        <text x="4" y="70" font-family="Georgia,'Times New Roman',serif" font-size="68" font-weight="700"
-              fill="url(#gld)" opacity="0.92">V</text>
-        <!-- G in silver (overlapping) -->
-        <text x="37" y="66" font-family="Georgia,'Times New Roman',serif" font-size="56" font-weight="700"
-              fill="url(#slv)" opacity="0.88">G</text>
-        <!-- Scales of Justice (centered, above the letters) -->
-        <!-- Post / column -->
-        <line x1="40" y1="12" x2="40" y2="34" stroke="url(#gld)" stroke-width="1.6" stroke-linecap="round"/>
-        <!-- Top orb -->
-        <circle cx="40" cy="10.5" r="2.5" fill="url(#gld)" filter="url(#glow)"/>
-        <!-- Horizontal beam -->
-        <line x1="24" y1="20" x2="56" y2="20" stroke="url(#gld)" stroke-width="1.6" stroke-linecap="round"/>
-        <!-- Left chain -->
-        <line x1="28" y1="20" x2="23" y2="30" stroke="url(#gld)" stroke-width="1" stroke-linecap="round" opacity="0.8"/>
-        <line x1="24" y1="20" x2="19" y2="30" stroke="url(#gld)" stroke-width="1" stroke-linecap="round" opacity="0.8"/>
-        <!-- Left pan (arc) -->
-        <path d="M17 30 Q21 35 25 30" fill="none" stroke="url(#gld)" stroke-width="1.5" stroke-linecap="round"/>
-        <!-- Right chain -->
-        <line x1="52" y1="20" x2="57" y2="30" stroke="url(#gld)" stroke-width="1" stroke-linecap="round" opacity="0.8"/>
-        <line x1="56" y1="20" x2="61" y2="30" stroke="url(#gld)" stroke-width="1" stroke-linecap="round" opacity="0.8"/>
-        <!-- Right pan (arc) -->
-        <path d="M55 30 Q59 35 63 30" fill="none" stroke="url(#gld)" stroke-width="1.5" stroke-linecap="round"/>
-        <!-- Base pedestal -->
-        <line x1="34" y1="34" x2="46" y2="34" stroke="url(#gld)" stroke-width="1.5" stroke-linecap="round"/>
+      <svg width="50" height="50" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect width="64" height="64" rx="10" fill="#111111" stroke="#242424" stroke-width="1"/>
+        <text x="32" y="45" font-family="Georgia,serif" font-size="34" font-weight="700" fill="#c9a84c" text-anchor="middle">VG</text>
       </svg>
     </div>
-    <div class="header-text">
-      <div class="header-title">Viniciu Gonçalves</div>
-      <div class="header-sub" id="hdr-sub">Advogado Criminalista · Dashboard Processual</div>
+    <div>
+      <div class="header-title">Dashboard Processual</div>
+      <div class="header-sub">Viniciu Gonçalves Advocacia</div>
     </div>
   </div>
   <div class="header-right">
     <span id="sync-badge" class="sync-badge sync-offline"><span class="sync-dot"></span>Modo local</span>
-    <div class="header-count-badge" id="hdr-count"></div>
+    <div class="header-count-badge" id="hdr-count">0 processos</div>
   </div>
-</div>
-
-<div class="nav-tabs">
-  <button class="nav-tab active" onclick="showTab('processos')">
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
-    Processos
-  </button>
-  <button class="nav-tab" onclick="showTab('kanban')">
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="5" height="18" rx="1"/><rect x="10" y="3" width="5" height="12" rx="1"/><rect x="17" y="3" width="5" height="15" rx="1"/></svg>
-    Tarefas
-  </button>
-  <button class="nav-tab" onclick="showTab('agenda')">
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-    Agenda
-  </button>
-  <button class="nav-tab" onclick="showTab('publicacoes')" id="tab-btn-publicacoes">
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 1-2 2zm0 0a2 2 0 0 1-2-2V9"/><line x1="9" y1="7" x2="15" y2="7"/><line x1="9" y1="11" x2="15" y2="11"/><line x1="9" y1="15" x2="12" y2="15"/></svg>
-    Publicações
-    <span id="pub-badge" style="display:none;background:var(--red,#c0392b);color:#fff;border-radius:10px;font-size:10px;padding:1px 6px;margin-left:4px;font-weight:700;"></span>
-  </button>
 </div>
 
 <div class="container">
-
-  <!-- ======= TAB PROCESSOS ======= -->
-  <div id="tab-processos">
-    <div class="stats" id="stats"></div>
-    <div class="toolbar">
-      <div class="filters" id="filters"></div>
-      <div class="search"><input type="text" id="search" placeholder="Buscar cliente, processo, resumo..." /></div>
+  <div class="stats" id="stats"></div>
+  <div class="toolbar">
+    <div class="filters" id="filters"></div>
+    <div class="search">
+      <span class="search-icon">⌕</span>
+      <input type="text" id="search" placeholder="Buscar cliente, processo, resumo…" />
     </div>
-    <div class="table-wrap">
-      <table>
-        <thead>
-          <tr>
-            <th style="width:12%">Cliente</th>
-            <th style="width:16%">Processo</th>
-            <th style="width:9%">Tipo / Sistema</th>
-            <th style="width:8%">Status</th>
-            <th style="width:30%">Estado atual <span style="font-weight:400;opacity:0.55;text-transform:none;letter-spacing:0;font-size:10px;">— clique para editar</span></th>
-            <th style="width:19%">Próximo passo <span style="font-weight:400;opacity:0.55;text-transform:none;letter-spacing:0;font-size:10px;">— clique para editar</span></th>
-            <th id="th-ver" style="width:8%;cursor:pointer;user-select:none;" onclick="toggleSortVer()" title="Ordenar por data de verificação">Verificação <span style="color:var(--gold);margin-left:3px;font-size:11px;">⇅</span></th>
-          </tr>
-        </thead>
-        <tbody id="tbody"></tbody>
-      </table>
-      <div id="empty" class="empty" style="display:none;">Nenhum processo encontrado.</div>
-      <div class="count-info" id="count-info"></div>
-    </div>
+    <button class="btn-icon" onclick="exportCSV()" title="Exportar para CSV">⬇ CSV</button>
   </div>
-
-  <!-- ======= TAB KANBAN ======= -->
-  <div id="tab-kanban" style="display:none;">
-    <div class="section-header">
-      <div class="section-title">Gestão de Tarefas</div>
-      <button class="btn-primary" onclick="openTaskModal()">+ Nova Tarefa</button>
-    </div>
-    <div class="kanban-board">
-      <div class="kanban-col col-aguardando" id="col-aguardando"
-           ondragover="onDragOver(event,'aguardando')" ondrop="onDrop(event,'aguardando')" ondragleave="onDragLeave(event)">
-        <div class="kanban-col-header">
-          <span class="kanban-col-title">Aguardando</span>
-          <span class="kanban-col-count" id="cnt-aguardando">0</span>
-        </div>
-        <div id="cards-aguardando"></div>
-      </div>
-      <div class="kanban-col col-fazendo" id="col-fazendo"
-           ondragover="onDragOver(event,'fazendo')" ondrop="onDrop(event,'fazendo')" ondragleave="onDragLeave(event)">
-        <div class="kanban-col-header">
-          <span class="kanban-col-title">Fazendo</span>
-          <span class="kanban-col-count" id="cnt-fazendo">0</span>
-        </div>
-        <div id="cards-fazendo"></div>
-      </div>
-      <div class="kanban-col col-feito" id="col-feito"
-           ondragover="onDragOver(event,'feito')" ondrop="onDrop(event,'feito')" ondragleave="onDragLeave(event)">
-        <div class="kanban-col-header">
-          <span class="kanban-col-title">Feito</span>
-          <span class="kanban-col-count" id="cnt-feito">0</span>
-        </div>
-        <div id="cards-feito"></div>
-      </div>
-    </div>
-  </div>
-
-  <!-- ======= TAB AGENDA ======= -->
-  <div id="tab-agenda" style="display:none;">
-    <div class="section-header">
-      <div class="agenda-nav">
-        <button class="nav-btn" onclick="changeWeek(-1)" title="Semana anterior">&#8249;</button>
-        <span class="week-label" id="week-label"></span>
-        <button class="nav-btn" onclick="changeWeek(1)" title="Próxima semana">&#8250;</button>
-        <button class="btn-ghost" style="margin-left:4px;" onclick="goToday()">Hoje</button>
-      </div>
-      <button class="btn-primary" onclick="openEventModal()">+ Novo Compromisso</button>
-    </div>
-    <div class="agenda-grid" id="agenda-grid"></div>
-  </div>
-
-</div>
-
-<!-- ======= MODAL TAREFA ======= -->
-<div class="modal-overlay" id="modal-task" onclick="if(event.target===this)closeModal('modal-task')">
-  <div class="modal">
-    <div class="modal-title" id="modal-task-title">Nova Tarefa</div>
-    <div class="form-group">
-      <label class="form-label">Título *</label>
-      <input type="text" class="form-input" id="t-titulo" placeholder="Ex: Protocolar memorial de defesa..." />
-    </div>
-    <div class="form-group">
-      <label class="form-label">Descrição / Detalhes</label>
-      <textarea class="form-input form-textarea" id="t-desc" placeholder="Descreva a tarefa com mais detalhes..."></textarea>
-    </div>
-    <div class="form-row">
-      <div class="form-group">
-        <label class="form-label">Responsável *</label>
-        <select class="form-input" id="t-resp" onchange="updateRespNote()">
-          <option value="viniciu">👨‍⚖️ Dr. Viniciu</option>
-          <option value="stefany">👩‍💼 Stefany</option>
-        </select>
-      </div>
-      <div class="form-group">
-        <label class="form-label">Coluna inicial</label>
-        <select class="form-input" id="t-col">
-          <option value="aguardando">Aguardando</option>
-          <option value="fazendo">Fazendo</option>
-          <option value="feito">Feito</option>
-        </select>
-      </div>
-    </div>
-    <div class="email-note" id="email-note">
-      📧 Ao criar, será aberto um e-mail para notificar Dr. Viniciu (viniciugoncalves@gmail.com).
-    </div>
-    <div class="modal-actions">
-      <button class="btn-ghost" onclick="closeModal('modal-task')">Cancelar</button>
-      <button class="btn-primary" id="btn-save-task" onclick="saveTask()">Criar Tarefa</button>
-    </div>
-  </div>
-
-  <!-- ======= TAB PUBLICAÇÕES ======= -->
-  <div id="tab-publicacoes" style="display:none;">
-    <div class="pub-toolbar">
-      <div class="pub-filters" id="pub-filters"></div>
-      <div class="search" style="min-width:220px;">
-        <input type="text" id="pub-search" placeholder="Buscar publicação, processo, cliente..." oninput="renderPublicacoes()" />
-      </div>
-      <span class="pub-badge-count" id="pub-count"></span>
-    </div>
-    <div class="pub-table-wrap">
-      <table class="pub-table">
-        <thead>
-          <tr>
-            <th style="width:3%"></th>
-            <th style="width:10%">Data</th>
-            <th style="width:11%">Fonte</th>
-            <th style="width:14%">Cliente</th>
-            <th style="width:19%">Processo</th>
-            <th style="width:35%">Assunto / Conteúdo</th>
-            <th style="width:8%">Ação</th>
-          </tr>
-        </thead>
-        <tbody id="pub-tbody"></tbody>
-      </table>
-      <div id="pub-empty" class="pub-empty" style="display:none;">
-        Nenhuma publicação encontrada.
-      </div>
-    </div>
-    <div class="pub-atualizado" id="pub-atualizado"></div>
-  </div>
-
-</div>
-
-<!-- ======= MODAL COMPROMISSO ======= -->
-<div class="modal-overlay" id="modal-event" onclick="if(event.target===this)closeModal('modal-event')">
-  <div class="modal">
-    <div class="modal-title">Novo Compromisso</div>
-    <div class="form-group">
-      <label class="form-label">Título *</label>
-      <input type="text" class="form-input" id="ev-titulo" placeholder="Ex: AIJ — Wagner Porte de Arma" />
-    </div>
-    <div class="form-row">
-      <div class="form-group">
-        <label class="form-label">Data *</label>
-        <input type="date" class="form-input" id="ev-data" />
-      </div>
-      <div class="form-group">
-        <label class="form-label">Horário</label>
-        <input type="time" class="form-input" id="ev-hora" />
-      </div>
-    </div>
-    <div class="form-group">
-      <label class="form-label">Local / Observações</label>
-      <textarea class="form-input form-textarea" style="min-height:60px;" id="ev-local"
-        placeholder="Ex: 1ª Vara Criminal de Cabo Frio — Sala 3"></textarea>
-    </div>
-    <div class="modal-actions">
-      <button class="btn-ghost" onclick="closeModal('modal-event')">Cancelar</button>
-      <button class="btn-primary" onclick="saveEvent()">Salvar Compromisso</button>
-    </div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th style="width:11%">Cliente</th>
+          <th style="width:15%">Processo</th>
+          <th style="width:9%">Tipo / Sistema</th>
+          <th style="width:13%">Status</th>
+          <th style="width:28%">Estado atual <span style="font-weight:400;opacity:0.45;text-transform:none;letter-spacing:0;font-size:9px;">← clique p/ editar</span></th>
+          <th style="width:17%">Próximo passo <span style="font-weight:400;opacity:0.45;text-transform:none;letter-spacing:0;font-size:9px;">← clique p/ editar</span></th>
+          <th id="th-ver" style="width:7%;cursor:pointer;user-select:none;" onclick="toggleSortVer()" title="Ordenar por data">Verificação <span id="sort-icon" style="color:var(--gold);margin-left:2px;font-size:10px;">↕</span></th>
+        </tr>
+      </thead>
+      <tbody id="tbody"></tbody>
+    </table>
+    <div id="empty" class="empty" style="display:none;">Nenhum processo encontrado.</div>
+    <div class="count-info" id="count-info"></div>
   </div>
 </div>
 
 <script>
-// ================================================================
-// DADOS PROCESSUAIS (atualizado pelo sync_dashboard.py)
-// ================================================================
-const data = [  {id:1,cl:"Wagner porte de arma",tipo:"Criminal",proc:"0189185-88.2019.8.19.0001 No sistema",st:"aij",stL:"AIJ 02/06",res:"AIJ 02/06 às 12:40 — Juntada de documento nos autos de ação penal por porte de arma de uso restrito (art. 16 Lei 10.826/03) na Vara Única de Arraial do Cabo",prox:"Preparar cliente e documentos para a AIJ em 02/06",ver:"16/04/2026"},
+﻿const data = [  {id:1,cl:"Wagner porte de arma",tipo:"Criminal",proc:"0189185-88.2019.8.19.0001 No sistema",st:"aij",stL:"AIJ 02/06",res:"AIJ 02/06 às 12:40 — Juntada de documento nos autos de ação penal por porte de arma de uso restrito (art. 16 Lei 10.826/03) na Vara Única de Arraial do Cabo",prox:"Preparar cliente e documentos para a AIJ em 02/06",ver:"16/04/2026"},
   {id:2,cl:"Thiago Madureira Maria da Penha",tipo:"Criminal",proc:"0011651-21.2023.8.19.0001",st:"urgente",stL:"Urgente",res:"⚠️ ACÓRDÃO 07/04/2026 pela 6ª Câmara Criminal — recurso NÃO CONHECIDO — de ofício sentença ANULADA — processo retorna à 1ª instância para nova sentença — ciência juntada em 10/04/2026 — ação penal de violência doméstica no JEC Adjunto Criminal de Iguaba Grande",prox:"⚠️ Acompanhar retorno dos autos à 1ª instância e designação de nova sentença",ver:"16/04/2026"},
   {id:3,cl:"Bruna e Jardel lesão corporal e ameaça",tipo:"Criminal",proc:"0807258-87.2023.8.19.0011 No sistema",st:"urgente",stL:"Urgente",res:"Publicada intimação em 31/03/2026 — ação penal por lesão corporal/ameaça na 1ª Vara Criminal de Cabo Frio — verificar urgentemente o teor e o prazo da intimação",prox:"—",ver:"16/04/2026"},
   {id:4,cl:"Gabriel",tipo:"Criminal",proc:"Inquérito 118-00745/2023",st:"aguardando",stL:"Aguardando",res:"Ainda não consta no MP",prox:"11/03",ver:"—"},
@@ -947,28 +280,7 @@ const data = [  {id:1,cl:"Wagner porte de arma",tipo:"Criminal",proc:"0189185-88
   {id:56,cl:"Simone Ribeiro Alvim",tipo:"Cível",proc:"0817048-61.2024.8.19.0011",st:"urgente",stL:"Urgente",res:"⚠️ Decorrido prazo de VINICIU SOUZA e LIVIA DA SILVA NOGUEIRA em 29/04/2026 — intimação publicada 01/04/2026 (despacho de 30/03/2026) — polo ativo vs BANCO BRADESCO S/A e outros 4 — 1ª Vara Cível Cabo Frio — Jurisdição Voluntária",prox:"⚠️ URGENTE — Verificar teor da intimação publicada 01/04/2026 e providenciar manifestação urgente",ver:"04/05/2026"},
   {id:57,cl:"Segredo de justiça",tipo:"Cível",proc:"0802202-91.2023.8.19.0005",st:"encerrado",stL:"Encerrado",res:"BAIXA DEFINITIVA — Reconhecimento e Extinção de União Estável na Vara Única de Arraial do Cabo — autuado em 07/11/2023 — processo em segredo de justiça",prox:"Processo encerrado com Baixa Definitiva",ver:"04/05/2026"}
 ];
-
-const publicacoes = [
-  // Exemplos removidos — a skill preencherá este array automaticamente
-];
-const pubAtualizadoEm = ""; // Data/hora da última atualização pela skill
-
-// ================================================================
-// UTILITÁRIOS
-// ================================================================
-function esc(s) {
-  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-}
-function escAttr(s) { return esc(s).replace(/"/g,'&quot;'); }
-function lsGet(k,d) { try { const v=localStorage.getItem(k); return v?JSON.parse(v):d; } catch(e){ return d; } }
-function lsSet(k,v) { try { localStorage.setItem(k,JSON.stringify(v)); } catch(e){} }
-function lsDel(k)   { try { localStorage.removeItem(k); } catch(e){} }
-
-// ================================================================
-// FIREBASE — Configuração em tempo real
-// Após criar seu projeto Firebase, cole as credenciais abaixo.
-// ================================================================
-const FIREBASE_CONFIG = {
+﻿const FIREBASE_CONFIG = {
   apiKey:            "AIzaSyAYpDwvo4lvhW1UE6PrqgQNuHENR0GLCbI",
   authDomain:        "dashboard-vg.firebaseapp.com",
   databaseURL:       "https://dashboard-vg-default-rtdb.firebaseio.com",
@@ -977,188 +289,199 @@ const FIREBASE_CONFIG = {
   messagingSenderId: "336314934763",
   appId:             "1:336314934763:web:7f38316dfab77ccdff25ae"
 };
-const FIREBASE_PATH = 'dashboard'; // Caminho no banco de dados
 
-// ----------------------------------------------------------------
-let sharedData = { tasks:[], events:[], statusOverrides:{}, fieldOverrides:{} };
-let _fbEnabled  = false;
-let _fbRef      = null;
-let _saveTimer  = null;
-let _localWrite = false; // Evita re-render quando a mudança é local
+const FIREBASE_PATH='dashboard';
+
+// ================================================================
+// UTILITÁRIOS
+// ================================================================
+function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function escAttr(s) { return esc(s).replace(/"/g,'&quot;'); }
+function lsGet(k,d) { try { const v=localStorage.getItem(k); return v?JSON.parse(v):d; } catch(e){ return d; } }
+function lsSet(k,v) { try { localStorage.setItem(k,JSON.stringify(v)); } catch(e){} }
+
+// ================================================================
+// FIREBASE
+// ================================================================
+const FIREBASE_PATH = 'dashboard';
+let sharedData = { statusOverrides:{}, fieldOverrides:{} };
+let _fbEnabled=false, _fbRef=null, _saveTimer=null, _localWrite=false;
 
 function setSyncStatus(state) {
   const el = document.getElementById('sync-badge');
   if (!el) return;
-  const labels = {
-    ok:         'Sincronizado',
-    syncing:    'Salvando…',
-    error:      'Sem conexão',
-    offline:    'Modo local',
-    connecting: 'Conectando…'
-  };
-  el.className = 'sync-badge sync-' + (state === 'connecting' ? 'syncing' : state);
-  el.innerHTML = `<span class="sync-dot"></span>${labels[state] || state}`;
+  const labels={ok:'Sincronizado',syncing:'Salvando…',error:'Sem conexão',offline:'Modo local',connecting:'Conectando…'};
+  el.className='sync-badge sync-'+(state==='connecting'?'syncing':state);
+  el.innerHTML=`<span class="sync-dot"></span>${labels[state]||state}`;
 }
 
-function _fbConfigured() {
-  return FIREBASE_CONFIG.apiKey && FIREBASE_CONFIG.apiKey !== 'COLE_AQUI';
-}
+function _fbConfigured() { return FIREBASE_CONFIG.apiKey && FIREBASE_CONFIG.apiKey!=='COLE_AQUI'; }
 
 function initSync() {
   if (!_fbConfigured()) {
-    // Modo local: sem Firebase configurado
-    sharedData.tasks           = lsGet('kanban_tasks', []);
-    sharedData.events          = lsGet('agenda_events', []);
-    sharedData.statusOverrides = lsGet('status_overrides', {});
-    sharedData.fieldOverrides  = lsGet('field_overrides', {});
+    sharedData.statusOverrides = lsGet('status_overrides',{});
+    sharedData.fieldOverrides  = lsGet('field_overrides',{});
     setSyncStatus('offline');
-    return Promise.resolve();
-  }
-  setSyncStatus('connecting');
-  return new Promise((resolve) => {
-    try {
-      const app = firebase.initializeApp(FIREBASE_CONFIG);
-      const db  = firebase.database(app);
-      _fbRef    = db.ref(FIREBASE_PATH);
-      _fbEnabled = true;
-
-      // Listener em tempo real — dispara para TODOS os usuários conectados
-      let firstLoad = true;
-      _fbRef.on('value', (snapshot) => {
-        const rec = snapshot.val() || {};
-        sharedData.tasks           = rec.tasks           || [];
-        sharedData.events          = rec.events          || [];
-        sharedData.statusOverrides = rec.statusOverrides || {};
-        sharedData.fieldOverrides  = rec.fieldOverrides  || {};
-        lsSet('sd_cache', sharedData);
-        setSyncStatus('ok');
-        if (firstLoad) {
-          firstLoad = false;
-          resolve();
-        } else if (!_localWrite) {
-          // Atualização remota — re-render para mostrar mudanças da outra pessoa
-          renderStats(); renderTable();
-          if (typeof activeTab !== 'undefined') {
-            if (activeTab === 'kanban') renderKanban();
-            if (activeTab === 'agenda') renderAgenda();
-          }
-        }
-        _localWrite = false;
-      }, (err) => {
-        console.error('Firebase read error:', err);
-        setSyncStatus('error');
-        const cache = lsGet('sd_cache', null);
-        if (cache) sharedData = cache;
-        if (firstLoad) { firstLoad = false; resolve(); }
-      });
-    } catch(e) {
-      console.error('Firebase init error:', e);
-      setSyncStatus('error');
-      const cache = lsGet('sd_cache', null);
-      if (cache) sharedData = cache;
-      resolve();
-    }
-  });
-}
-
-// Mantida por compatibilidade — com Firebase os dados chegam via listener
-async function loadSharedData(silent) {
-  if (!_fbEnabled) {
-    sharedData.tasks           = lsGet('kanban_tasks', []);
-    sharedData.events          = lsGet('agenda_events', []);
-    sharedData.statusOverrides = lsGet('status_overrides', {});
-    sharedData.fieldOverrides  = lsGet('field_overrides', {});
-    setSyncStatus('offline');
-  }
-}
-
-async function _doSave() {
-  if (!_fbEnabled) {
-    lsSet('kanban_tasks',      sharedData.tasks);
-    lsSet('agenda_events',     sharedData.events);
-    lsSet('status_overrides',  sharedData.statusOverrides);
-    lsSet('field_overrides',   sharedData.fieldOverrides);
+    renderAll();
     return;
   }
-  setSyncStatus('syncing');
-  _localWrite = true;
-  lsSet('sd_cache', sharedData);
+  setSyncStatus('connecting');
   try {
-    await _fbRef.set(sharedData);
-    setSyncStatus('ok');
+    const app = firebase.initializeApp(FIREBASE_CONFIG);
+    _fbRef = firebase.database(app).ref(FIREBASE_PATH);
+    _fbEnabled = true;
+    _fbRef.on('value', snap => {
+      if (_localWrite) { _localWrite=false; return; }
+      const rec = snap.val() || {};
+      sharedData.statusOverrides = rec.statusOverrides || {};
+      sharedData.fieldOverrides  = rec.fieldOverrides  || {};
+      setSyncStatus('ok');
+      renderAll();
+    });
+    _fbRef.on('error', ()=>setSyncStatus('error'));
   } catch(e) {
-    _localWrite = false;
+    sharedData.statusOverrides = lsGet('status_overrides',{});
+    sharedData.fieldOverrides  = lsGet('field_overrides',{});
     setSyncStatus('error');
+    renderAll();
   }
 }
 
 function scheduleSave() {
+  lsSet('status_overrides', sharedData.statusOverrides);
+  lsSet('field_overrides',  sharedData.fieldOverrides);
+  if (!_fbEnabled) return;
   clearTimeout(_saveTimer);
-  _saveTimer = setTimeout(_doSave, 600);
+  _saveTimer = setTimeout(()=>{
+    setSyncStatus('syncing');
+    _localWrite = true;
+    _fbRef.set(sharedData, err => setSyncStatus(err?'error':'ok'));
+  }, 600);
 }
 
 // ================================================================
-// NAVEGAÇÃO POR ABAS
+// SISTEMA DE STATUS — MULTI-STATUS
 // ================================================================
-let activeTab = 'processos';
-function showTab(tab) {
-  activeTab = tab;
-  ['processos','kanban','agenda','publicacoes'].forEach(t => {
-    document.getElementById('tab-'+t).style.display = t===tab ? '' : 'none';
-  });
-  document.querySelectorAll('.nav-tab').forEach((btn,i) => {
-    btn.classList.toggle('active', ['processos','kanban','agenda','publicacoes'][i]===tab);
-  });
-  if (tab==='kanban') renderKanban();
-  if (tab==='agenda') renderAgenda();
-  if (tab==='publicacoes') renderPublicacoes();
+const ST_PICKER_OPTS = [
+  {key:'urgente',   label:'Urgente',     color:'#f07070'},
+  {key:'aij',       label:'AIJ marcada', color:'#c9a84c'},
+  {key:'atencao',   label:'Atenção',     color:'#d4894a'},
+  {key:'aguardando',label:'Aguardando',  color:'#666'},
+  {key:'encerrado', label:'Encerrado',   color:'#62c795'},
+  {key:'favoravel', label:'Favorável',   color:'#52b788'},
+];
+
+const ST_LABELS = {
+  urgente:'Urgente', aij:'AIJ marcada', atencao:'Atenção',
+  aguardando:'Aguardando', encerrado:'Encerrado', favoravel:'Favorável'
+};
+
+function bc(st) {
+  return ({urgente:'b-urgente',aij:'b-aij',atencao:'b-atencao',
+           aguardando:'b-aguardando',encerrado:'b-encerrado',favoravel:'b-favoravel'})[st]||'b-aguardando';
+}
+
+// Normaliza para array (retrocompatibilidade com deolho → atencao)
+function _normSt(v) {
+  if (!v) return null;
+  if (Array.isArray(v)) return v.length>0 ? v.map(s=>s==='deolho'?'atencao':s) : null;
+  const mapped = v==='deolho'?'atencao':v;
+  return [mapped];
+}
+
+function getStOv(id)      { return _normSt(sharedData.statusOverrides[id]); }
+function setStOv(id, arr) { sharedData.statusOverrides[id]=arr; scheduleSave(); }
+function delStOv(id)      { delete sharedData.statusOverrides[id]; scheduleSave(); }
+
+function toggleStStatus(id, val) {
+  let arr = getStOv(id) || [];
+  const idx = arr.indexOf(val);
+  if (idx>=0) arr.splice(idx,1); else arr.push(val);
+  if (arr.length===0) delStOv(id); else setStOv(id,arr);
+}
+
+function effStArr(d) {
+  const ov = getStOv(d.id);
+  if (ov && ov.length>0) return ov;
+  const st = (d.st==='deolho')?'atencao':d.st;
+  return [st];
+}
+function effSt(d)  { return effStArr(d)[0]; }
+function effStL(d) { return effStArr(d).map(s=>ST_LABELS[s]||s).join(', '); }
+
+// Campo overrides
+function getOv(id,f)   { return (sharedData.fieldOverrides[id+'_'+f]??null); }
+function setOv(id,f,v) { sharedData.fieldOverrides[id+'_'+f]=v; scheduleSave(); }
+function delOv(id,f)   { delete sharedData.fieldOverrides[id+'_'+f]; scheduleSave(); }
+function getField(d,f) { const ov=getOv(d.id,f); return ov!==null?ov:(d[f]??''); }
+
+// ================================================================
+// DETECÇÃO DE SISTEMA PROCESSUAL
+// ================================================================
+function detectSys(proc,res) {
+  const p=(proc||'').toLowerCase(), r=(res||'').toLowerCase();
+  if (p.includes('4.02.')) return {cls:'sys-jf',label:'JF / TRF2'};
+  if (p.includes('8.22.')) return {cls:'sys-tjro',label:'PJe TJRO'};
+  if (p.includes('8.26.')) return {cls:'sys-tjsp',label:'TJSP'};
+  if (p.includes('eleit')||r.includes('eleit')||r.includes('tre')) return {cls:'sys-eleit',label:'Justiça Eleitoral'};
+  if (p.includes('8.19.')) {
+    if (r.includes('projudi')) return {cls:'sys-proj',label:'PROJUDI'};
+    if (r.includes('pdpj'))    return {cls:'sys-pdpj',label:'PDPJ'};
+    return {cls:'sys-tjrj',label:'PJe TJRJ'};
+  }
+  if (/\b(118|956|912|129|131|132)\s*[-–]\s*\d/.test(p)||r.includes('delegacia')||p.includes('inquérito')||p.includes('inquerito')) return {cls:'sys-del',label:'Delegacia'};
+  return null;
+}
+function sysBadge(proc,res) {
+  const s=detectSys(proc,res);
+  return s?`<span class="sys-badge ${s.cls}">${s.label}</span>`:'';
 }
 
 // ================================================================
-// ABA PROCESSOS
+// AUTO-CLASSIFICAÇÃO DE STATUS (usado na atualização de processos)
 // ================================================================
-let activeFilter = 'todos', searchTerm = '';
-let sortByVer = false, sortVerAsc = false;
+function autoClassifyStatus(res, prox) {
+  const text = ((res||'')+(prox||'')).toLowerCase();
+  const statuses = [];
+  // AIJ marcada — detecta data de audiência
+  if (/\baij\b|audiência de instrução|audiência.*instrução|instrução.*julgamento/i.test(res||'')) statuses.push('aij');
+  // Urgente
+  if (/⚠️|urgente|urgência|prazo.*vence|vence.*hoje|prazo.*hoje|sentença.*publicada|acórdão/i.test(res||'')) statuses.push('urgente');
+  // Encerrado
+  if (/arquivado definitivamente|baixa definitiva|encerrado|transitado em julgado/i.test(res||'')) statuses.push('encerrado');
+  // Favoravel
+  if (/procedente|favorável|acordo homologado|sentença.*procedente/i.test(res||'')) statuses.push('favoravel');
+  // Atenção
+  if (/decorrido.*prazo|prazo decorrido|pendente.*manifestação|aguardando.*urgente/i.test(text)) statuses.push('atencao');
+  return statuses.length > 0 ? statuses : ['aguardando'];
+}
+
+// ================================================================
+// FILTROS E BUSCA
+// ================================================================
+let activeFilter='todos', searchTerm='', sortByVer=false, sortVerAsc=false;
 
 const filterDefs = [
-  {key:'todos',     label:'Todos'},
-  {key:'urgente',   label:'Urgentes'},
-  {key:'deolho',    label:'De olho'},
-  {key:'aij',       label:'AIJ marcada'},
-  {key:'Criminal',  label:'Criminais'},
-  {key:'Cível',     label:'Cíveis'},
-  {key:'atencao',   label:'Atenção'},
-  {key:'aguardando',label:'Aguardando'},
-  {key:'encerrado', label:'Encerrados'},
-  {key:'recent7',   label:'🕐 Últ. 7 dias'},
+  {key:'todos',      label:'Todos'},
+  {key:'urgente',    label:'🔴 Urgentes'},
+  {key:'aij',        label:'⚖️ AIJ marcada'},
+  {key:'atencao',    label:'🟠 Atenção'},
+  {key:'aguardando', label:'Aguardando'},
+  {key:'encerrado',  label:'✅ Encerrados'},
+  {key:'Criminal',   label:'Criminais'},
+  {key:'Cível',      label:'Cíveis'},
+  {key:'recent7',    label:'📅 Últ. 7 dias'},
 ];
 
 function parseVerDate(ver) {
-  if (!ver || ver === '—') return null;
-  const parts = ver.split('/');
-  if (parts.length !== 3) return null;
-  return new Date(parseInt(parts[2]), parseInt(parts[1])-1, parseInt(parts[0]));
-}
-
-function renderStats() {
-  const ativos = data.filter(d=>effSt(d)!=='encerrado').length;
-  const urg  = data.filter(d=>effSt(d)==='urgente').length;
-  const aij  = data.filter(d=>effSt(d)==='aij').length;
-  const enc  = data.filter(d=>effSt(d)==='encerrado'||effSt(d)==='favoravel').length;
-  const crim = data.filter(d=>d.tipo==='Criminal').length;
-  const civ  = data.filter(d=>d.tipo==='Cível').length;
-  document.getElementById('stats').innerHTML = `
-    <div class="stat"><div class="stat-n">${ativos}</div><div class="stat-l">Processos ativos</div></div>
-    <div class="stat"><div class="stat-n n-urg">${urg}</div><div class="stat-l">Urgentes</div></div>
-    <div class="stat"><div class="stat-n n-aij">${aij}</div><div class="stat-l">AIJ marcada</div></div>
-    <div class="stat"><div class="stat-n n-ok">${enc}</div><div class="stat-l">Favoráveis/Encerrados</div></div>
-    <div class="stat"><div class="stat-n">${crim}</div><div class="stat-l">Criminais</div></div>
-    <div class="stat"><div class="stat-n">${civ}</div><div class="stat-l">Cíveis</div></div>`;
-  document.getElementById('hdr-count').textContent = data.length + ' processos';
+  if (!ver||ver==='—') return null;
+  const p=ver.split('/');
+  if (p.length!==3) return null;
+  return new Date(parseInt(p[2]),parseInt(p[1])-1,parseInt(p[0]));
 }
 
 function renderFilters() {
-  document.getElementById('filters').innerHTML = filterDefs.map(f =>
+  document.getElementById('filters').innerHTML = filterDefs.map(f=>
     `<button class="filter-btn${activeFilter===f.key?' active':''}" onclick="setFilter('${f.key}')">${f.label}</button>`
   ).join('');
 }
@@ -1167,546 +490,220 @@ function setFilter(k) { activeFilter=k; renderFilters(); renderTable(); }
 
 function filtered() {
   return data.filter(d => {
-    const st = effSt(d);
+    const stArr=effStArr(d);
     let mf;
-    if (activeFilter === 'todos') {
-      mf = true;
-    } else if (activeFilter === 'Criminal') {
-      mf = d.tipo === 'Criminal';
-    } else if (activeFilter === 'Cível') {
-      mf = d.tipo === 'Cível';
-    } else if (activeFilter === 'encerrado') {
-      mf = (st === 'encerrado' || st === 'favoravel');
-    } else if (activeFilter === 'recent7') {
-      const dt = parseVerDate(d.ver);
-      if (!dt) { mf = false; }
-      else {
-        const cutoff = new Date();
-        cutoff.setHours(0,0,0,0);
-        cutoff.setDate(cutoff.getDate() - 7);
-        mf = dt >= cutoff;
-      }
-    } else {
-      mf = st === activeFilter;
-    }
-    const s = searchTerm.toLowerCase();
-    const ms = !s || d.cl.toLowerCase().includes(s) || d.proc.toLowerCase().includes(s) || d.res.toLowerCase().includes(s);
-    return mf && ms;
+    if      (activeFilter==='todos')     mf=true;
+    else if (activeFilter==='Criminal')  mf=d.tipo==='Criminal';
+    else if (activeFilter==='Cível')     mf=d.tipo==='Cível';
+    else if (activeFilter==='encerrado') mf=stArr.includes('encerrado')||stArr.includes('favoravel');
+    else if (activeFilter==='recent7') {
+      const dt=parseVerDate(getField(d,'ver'));
+      if (!dt) { mf=false; }
+      else { const c=new Date(); c.setHours(0,0,0,0); c.setDate(c.getDate()-7); mf=dt>=c; }
+    } else mf=stArr.includes(activeFilter);
+    const s=searchTerm.toLowerCase();
+    const ms=!s||getField(d,'cl').toLowerCase().includes(s)||getField(d,'proc').toLowerCase().includes(s)||getField(d,'res').toLowerCase().includes(s);
+    return mf&&ms;
   });
 }
 
-function bc(st) {
-  return ({urgente:'b-urgente',aij:'b-aij',atencao:'b-atencao',aguardando:'b-aguardando',encerrado:'b-encerrado',favoravel:'b-favoravel',deolho:'b-deolho'})[st]||'b-aguardando';
-}
-const ST_LABELS = {urgente:'Urgente',aij:'AIJ marcada',atencao:'Atenção',aguardando:'Aguardando',encerrado:'Encerrado',favoravel:'Favorável',deolho:'De olho'};
-
-// Override de status manual (sincronizado)
-function getStOv(id)   { return sharedData.statusOverrides[id] || null; }
-function setStOv(id,v) { sharedData.statusOverrides[id] = v; scheduleSave(); }
-function delStOv(id)   { delete sharedData.statusOverrides[id]; scheduleSave(); }
-// Status efetivo (override tem prioridade)
-function effSt(d)  { return getStOv(d.id) || d.st; }
-function effStL(d) { const o=getStOv(d.id); return o ? (ST_LABELS[o]||o) : d.stL; }
-
-// Detecta o sistema processual pelo número e texto do processo
-function detectSys(proc, res) {
-  const p = (proc||'').toLowerCase();
-  const r = (res||'').toLowerCase();
-  // Justiça Federal / TRF2
-  if (p.includes('4.02.')) return {cls:'sys-jf',   label:'JF / TRF2'};
-  // TJRO (Porto Velho)
-  if (p.includes('8.22.')) return {cls:'sys-tjro', label:'PJe TJRO'};
-  // TJSP
-  if (p.includes('8.26.')) return {cls:'sys-tjsp', label:'TJSP'};
-  // Processos eleitorais
-  if (p.includes('eleit') || r.includes('eleit') || r.includes('tre')) return {cls:'sys-eleit', label:'Justiça Eleitoral'};
-  // TJRJ — verifica subsistema
-  if (p.includes('8.19.')) {
-    if (r.includes('projudi')) return {cls:'sys-proj', label:'PROJUDI'};
-    if (r.includes('pdpj'))    return {cls:'sys-pdpj', label:'PDPJ'};
-    return {cls:'sys-tjrj', label:'PJe TJRJ'};
-  }
-  // Inquéritos / Delegacia (formatos: 118-xxxxx/xxxx, 956-xxxxx/xxxx, 912-xxx, 129-xxx)
-  if (/\b(118|956|912|129|131|132)\s*[-–]\s*\d/.test(p) || r.includes('delegacia') || p.includes('inquérito') || p.includes('inquerito')) {
-    return {cls:'sys-del', label:'Delegacia'};
-  }
-  return null;
+// ================================================================
+// STATS
+// ================================================================
+function renderStats() {
+  const ativos  = data.filter(d=>!effStArr(d).includes('encerrado')&&!effStArr(d).includes('favoravel')).length;
+  const urg     = data.filter(d=>effStArr(d).includes('urgente')).length;
+  const aij     = data.filter(d=>effStArr(d).includes('aij')).length;
+  const enc     = data.filter(d=>effStArr(d).includes('encerrado')||effStArr(d).includes('favoravel')).length;
+  const atencao = data.filter(d=>effStArr(d).includes('atencao')).length;
+  const crim    = data.filter(d=>d.tipo==='Criminal').length;
+  const civ     = data.filter(d=>d.tipo==='Cível').length;
+  document.getElementById('stats').innerHTML =
+    `<div class="stat" onclick="setFilter('todos')"><div class="stat-n">${ativos}</div><div class="stat-l">Ativos</div></div>`+
+    `<div class="stat" onclick="setFilter('urgente')"><div class="stat-n n-urg">${urg}</div><div class="stat-l">Urgentes</div></div>`+
+    `<div class="stat" onclick="setFilter('aij')"><div class="stat-n n-aij">${aij}</div><div class="stat-l">AIJ marcada</div></div>`+
+    `<div class="stat" onclick="setFilter('atencao')"><div class="stat-n n-atencao">${atencao}</div><div class="stat-l">Atenção</div></div>`+
+    `<div class="stat" onclick="setFilter('encerrado')"><div class="stat-n n-ok">${enc}</div><div class="stat-l">Encerrados</div></div>`+
+    `<div class="stat" onclick="setFilter('Criminal')"><div class="stat-n">${crim}</div><div class="stat-l">Criminais</div></div>`+
+    `<div class="stat" onclick="setFilter('Cível')"><div class="stat-n">${civ}</div><div class="stat-l">Cíveis</div></div>`;
+  document.getElementById('hdr-count').textContent = data.length+' processos';
 }
 
-function sysBadge(proc, res) {
-  const s = detectSys(proc, res);
-  if (!s) return '';
-  return `<span class="sys-badge ${s.cls}">${s.label}</span>`;
-}
-
-// Overrides manuais de campos (sincronizados)
-function getOv(id,f)   { return sharedData.fieldOverrides[id+'_'+f] || null; }
-function setOv(id,f,v) { sharedData.fieldOverrides[id+'_'+f] = v; scheduleSave(); }
-function delOv(id,f)   { delete sharedData.fieldOverrides[id+'_'+f]; scheduleSave(); }
-
+// ================================================================
+// TABELA — RENDERIZAÇÃO
+// ================================================================
 function toggleSortVer() {
-  if (!sortByVer) { sortByVer = true; sortVerAsc = true; }
-  else if (sortVerAsc) { sortVerAsc = false; }
-  else { sortByVer = false; }
+  if (!sortByVer) { sortByVer=true; sortVerAsc=true; }
+  else if (sortVerAsc) { sortVerAsc=false; }
+  else { sortByVer=false; }
   renderTable();
+}
+
+function rowClass(d) {
+  const arr=effStArr(d);
+  if (arr.includes('urgente')) return 'row-urgente';
+  if (arr.includes('aij'))     return 'row-aij';
+  if (arr.includes('atencao')) return 'row-atencao';
+  return '';
+}
+
+function buildStatusCell(d) {
+  const arr = effStArr(d);
+  const isManual = getStOv(d.id)!==null;
+  const badges = arr.map(s=>`<span class="badge ${bc(s)}"><span class="badge-dot"></span>${esc(ST_LABELS[s]||s)}</span>`).join('');
+  const manualDot = isManual?'<span class="st-manual-dot" title="Definido manualmente"></span>':'';
+  const pickerOpts = ST_PICKER_OPTS.map(o=>{
+    const chk=arr.includes(o.key);
+    return `<div class="st-opt${chk?' checked':''}" onclick="applyMultiSt(event,${d.id},'${o.key}')"><span class="st-check">${chk?'✓':''}</span><span class="dot" style="background:${o.color}"></span>${o.label}</div>`;
+  }).join('');
+  return `<div class="st-wrap">
+    <div class="st-badges">${badges}${manualDot}<button class="st-pick-btn" onclick="toggleStPicker(event,${d.id})" title="Alterar status">✎</button></div>
+    <div class="st-picker" id="stp-${d.id}">
+      <div class="st-picker-title">Selecionar status</div>
+      ${pickerOpts}
+      <hr class="st-sep">
+      <div class="st-restore" onclick="restoreStatus(${d.id})">↩ Restaurar original</div>
+    </div>
+  </div>`;
 }
 
 function renderTable() {
   let rows = filtered();
-
-  // Ordenação por data de verificação
   if (sortByVer) {
-    rows = rows.slice().sort((a, b) => {
-      const da = parseVerDate(a.ver), db = parseVerDate(b.ver);
-      const ta = da ? da.getTime() : (sortVerAsc ? Infinity : -Infinity);
-      const tb = db ? db.getTime() : (sortVerAsc ? Infinity : -Infinity);
-      return sortVerAsc ? ta - tb : tb - ta;
+    rows = rows.slice().sort((a,b)=>{
+      const da=parseVerDate(getField(a,'ver')), db=parseVerDate(getField(b,'ver'));
+      const ta=da?da.getTime():(sortVerAsc?Infinity:-Infinity);
+      const tb=db?db.getTime():(sortVerAsc?Infinity:-Infinity);
+      return sortVerAsc?ta-tb:tb-ta;
     });
   }
+  const icon=!sortByVer?'↕':sortVerAsc?'↑':'↓';
+  const si=document.getElementById('sort-icon');
+  if (si) si.textContent=icon;
 
-  // Atualiza ícone do cabeçalho
-  const verTh = document.getElementById('th-ver');
-  if (verTh) {
-    const icon = !sortByVer ? '⇅' : sortVerAsc ? '↑' : '↓';
-    verTh.innerHTML = `Verificação <span style="color:var(--gold);margin-left:3px;font-size:11px;">${icon}</span>`;
-  }
-
-  const tbody = document.getElementById('tbody');
-  const empty = document.getElementById('empty');
-  const info  = document.getElementById('count-info');
+  const tbody=document.getElementById('tbody');
+  const empty=document.getElementById('empty');
+  const info=document.getElementById('count-info');
   if (!rows.length) { tbody.innerHTML=''; empty.style.display='block'; info.textContent=''; return; }
-  empty.style.display = 'none';
-  info.textContent = rows.length+' processo'+(rows.length!==1?'s':'')+' encontrado'+(rows.length!==1?'s':'');
+  empty.style.display='none';
+  info.textContent=rows.length+' processo'+(rows.length!==1?'s':'')+' encontrado'+(rows.length!==1?'s':'');
 
   tbody.innerHTML = rows.map(d => {
-    const resOv   = getOv(d.id,'res'),  proxOv  = getOv(d.id,'prox');
-    const resText = resOv  !== null ? resOv  : d.res;
-    const proxText= proxOv !== null ? proxOv : d.prox;
-    const st      = effSt(d);
-    const stLabel = effStL(d);
-    const isManualSt = getStOv(d.id) !== null;
-    const resCls  = st==='urgente' ? 'res-urg' : 'res-norm';
-    const resDot  = resOv  !== null ? ' <span class="override-dot" title="Editado manualmente"></span>' : '';
-    const proxDot = proxOv !== null ? ' <span class="override-dot" title="Editado manualmente"></span>' : '';
-    const manualDot = isManualSt ? '<span class="st-manual-dot" title="Status definido manualmente"></span>' : '';
-    return `<tr>
-      <td><strong>${esc(d.cl)}</strong></td>
-      <td><span class="proc-num">${esc(d.proc)}</span></td>
-      <td><span class="${d.tipo==='Criminal'?'tipo-c':'tipo-cv'}">${esc(d.tipo)}</span>${sysBadge(d.proc, d.res)}</td>
-      <td>
-        <div class="st-wrap">
-          <span class="badge ${bc(st)} st-click" onclick="toggleStPicker(event,${d.id})" title="Clique para alterar o status">
-            ${esc(stLabel)}${manualDot}<span class="st-arrow">▾</span>
-          </span>
-          <div class="st-picker" id="stp-${d.id}">
-            <div class="st-opt" onclick="applyStOv(${d.id},'urgente')"><span class="dot" style="background:#e74c3c"></span>Urgente</div>
-            <div class="st-opt" onclick="applyStOv(${d.id},'deolho')"><span class="dot" style="background:#3949ab"></span>De olho</div>
-            <div class="st-opt" onclick="applyStOv(${d.id},'aguardando')"><span class="dot" style="background:#aaa"></span>Aguardando</div>
-            <hr class="st-sep">
-            <div class="st-restore" onclick="applyStOv(${d.id},null)">↩ Restaurar original</div>
-          </div>
-        </div>
-      </td>
-      <td class="editable-cell" id="cell-${d.id}-res"   onclick="startEdit(${d.id},'res',this)">
-        <span class="${resCls}">${esc(resText)}</span>${resDot}<span class="edit-hint">✏️</span>
-      </td>
-      <td class="editable-cell" id="cell-${d.id}-prox" onclick="startEdit(${d.id},'prox',this)">
-        <span class="prox-text">${esc(proxText)}</span>${proxDot}<span class="edit-hint">✏️</span>
-      </td>
-      <td><span class="ver-text">${esc(d.ver)}</span></td>
+    const rc=rowClass(d);
+    const resOv=getOv(d.id,'res'), proxOv=getOv(d.id,'prox');
+    const clOv=getOv(d.id,'cl'),   procOv=getOv(d.id,'proc'), verOv=getOv(d.id,'ver');
+    const resText  = resOv!==null  ? resOv  : d.res;
+    const proxText = proxOv!==null ? proxOv : d.prox;
+    const clText   = clOv!==null   ? clOv   : d.cl;
+    const procText = procOv!==null ? procOv : d.proc;
+    const verText  = verOv!==null  ? verOv  : d.ver;
+    const resCls   = effStArr(d).includes('urgente')?'res-urg':'res-norm';
+    const dRes=resOv!==null?'<span class="override-dot" title="Editado"></span>':'';
+    const dProx=proxOv!==null?'<span class="override-dot" title="Editado"></span>':'';
+    const dCl=clOv!==null?'<span class="override-dot" title="Editado"></span>':'';
+    const dProc=procOv!==null?'<span class="override-dot" title="Editado"></span>':'';
+    const dVer=verOv!==null?'<span class="override-dot" title="Editado"></span>':'';
+    return `<tr class="${rc}">
+      <td class="editable-cell" id="cell-${d.id}-cl" onclick="startEdit(${d.id},'cl',this,'inline')"><strong>${esc(clText)}</strong>${dCl}<span class="edit-hint">✎</span></td>
+      <td class="editable-cell" id="cell-${d.id}-proc" onclick="startEdit(${d.id},'proc',this,'inline')"><span class="proc-num">${esc(procText)}</span>${dProc}<span class="edit-hint">✎</span></td>
+      <td><span class="${d.tipo==='Criminal'?'tipo-c':'tipo-cv'}">${esc(getField(d,'tipo'))}</span>${sysBadge(procText,resText)}</td>
+      <td>${buildStatusCell(d)}</td>
+      <td class="editable-cell" id="cell-${d.id}-res" onclick="startEdit(${d.id},'res',this,'area')"><span class="${resCls}">${esc(resText)}</span>${dRes}<span class="edit-hint">✎</span></td>
+      <td class="editable-cell" id="cell-${d.id}-prox" onclick="startEdit(${d.id},'prox',this,'area')"><span class="prox-text">${esc(proxText)}</span>${dProx}<span class="edit-hint">✎</span></td>
+      <td class="editable-cell" id="cell-${d.id}-ver" onclick="startEdit(${d.id},'ver',this,'inline')"><span class="ver-text">${esc(verText)}</span>${dVer}<span class="edit-hint">✎</span></td>
     </tr>`;
   }).join('');
 }
 
-// ── Picker de status ──────────────────────────────────────────
+// ================================================================
+// STATUS PICKER
+// ================================================================
 let openPickerId = null;
+
 function toggleStPicker(e, id) {
   e.stopPropagation();
-  const picker = document.getElementById('stp-'+id);
+  const picker=document.getElementById('stp-'+id);
   if (!picker) return;
-  const isOpen = picker.classList.contains('open');
+  const isOpen=picker.classList.contains('open');
   closeAllStPickers();
-  if (!isOpen) { picker.classList.add('open'); openPickerId = id; }
+  if (!isOpen) { picker.classList.add('open'); openPickerId=id; }
 }
 function closeAllStPickers() {
   document.querySelectorAll('.st-picker.open').forEach(p=>p.classList.remove('open'));
-  openPickerId = null;
+  openPickerId=null;
 }
-function applyStOv(id, val) {
-  if (val === null) delStOv(id); else setStOv(id, val);
-  closeAllStPickers();
-  renderStats();
-  renderFilters();
-  renderTable();
+function applyMultiSt(e, id, val) {
+  e.stopPropagation();
+  toggleStStatus(id, val);
+  renderStats(); renderFilters(); renderTable();
+  setTimeout(()=>{ const p=document.getElementById('stp-'+id); if(p){p.classList.add('open');openPickerId=id;} },0);
 }
-document.addEventListener('click', e => {
-  if (openPickerId && !e.target.closest('.st-wrap')) closeAllStPickers();
-});
+function restoreStatus(id) {
+  delStOv(id); closeAllStPickers(); renderStats(); renderFilters(); renderTable();
+}
+document.addEventListener('click', e => { if(openPickerId&&!e.target.closest('.st-wrap')) closeAllStPickers(); });
 
-function startEdit(id, field, cell) {
-  if (cell.querySelector('textarea')) return;
-  const d = data.find(x=>x.id===id);
-  if (!d) return;
-  const current  = getOv(id,field) !== null ? getOv(id,field) : (field==='res' ? d.res : d.prox);
-  const snapshot = cell.innerHTML;
-  cell.onclick = null;
-  cell.innerHTML = `
-    <textarea class="edit-box" id="eb-${id}-${field}">${escAttr(current)}</textarea>
-    <div class="edit-actions">
-      <button class="edit-save"   onclick="doSave(event,${id},'${field}')">💾 Salvar</button>
-      <button class="edit-cancel" data-snap="" onclick="doCancel(event,${id},'${field}',this)">Cancelar</button>
-      <button class="edit-clear"  onclick="doClear(event,${id},'${field}')">↩ Restaurar original</button>
-    </div>`;
-  // store snapshot for cancel
-  cell.querySelector('.edit-cancel')._snap = snapshot;
-  cell.querySelector('textarea').focus();
+// ================================================================
+// EDIÇÃO DE CAMPOS — TODAS AS COLUNAS
+// ================================================================
+function startEdit(id, field, cell, mode) {
+  if (cell.querySelector('textarea,input.edit-box-inline')) return;
+  const d=data.find(x=>x.id===id); if (!d) return;
+  const current=getOv(id,field)!==null?getOv(id,field):(d[field]??'');
+  const snapshot=cell.innerHTML;
+  cell.onclick=null;
+  const actions=`<div class="edit-actions"><button class="edit-save" onclick="doSave(event,${id},'${field}')">💾 Salvar</button><button class="edit-cancel" onclick="doCancel(event,${id},'${field}',this)">Cancelar</button><button class="edit-clear" onclick="doClear(event,${id},'${field}')">↩ Original</button></div>`;
+  if (mode==='inline') {
+    cell.innerHTML=`<input type="text" class="edit-box-inline" id="eb-${id}-${field}" value="${escAttr(current)}" />${actions}`;
+  } else {
+    cell.innerHTML=`<textarea class="edit-box" id="eb-${id}-${field}">${escAttr(current)}</textarea>${actions}`;
+  }
+  cell.querySelector('.edit-cancel')._snap=snapshot;
+  const inp=cell.querySelector('textarea,input');
+  if (inp) { inp.focus(); if (inp.select) inp.select(); }
 }
 
 function doSave(e,id,field) {
   e.stopPropagation();
-  const ta = document.getElementById('eb-'+id+'-'+field);
-  if (ta) setOv(id, field, ta.value);
+  const el=document.getElementById('eb-'+id+'-'+field);
+  if (el) setOv(id,field,el.value);
   renderTable();
 }
 function doCancel(e,id,field,btn) {
   e.stopPropagation();
-  const cell = document.getElementById('cell-'+id+'-'+field);
-  if (!cell) return;
-  cell.innerHTML = btn._snap;
-  cell.onclick = function(){ startEdit(id,field,cell); };
+  const cell=document.getElementById('cell-'+id+'-'+field); if (!cell) return;
+  cell.innerHTML=btn._snap;
+  const mode=(field==='res'||field==='prox')?'area':'inline';
+  cell.onclick=function(){startEdit(id,field,cell,mode);};
 }
-function doClear(e,id,field) {
-  e.stopPropagation();
-  delOv(id,field);
-  renderTable();
-}
-
-document.getElementById('search').addEventListener('input', e => { searchTerm=e.target.value; renderTable(); });
+function doClear(e,id,field) { e.stopPropagation(); delOv(id,field); renderTable(); }
 
 // ================================================================
-// ABA KANBAN
+// EXPORTAR CSV
 // ================================================================
-const RESP_EMAIL = { viniciu:'viniciugoncalves@gmail.com', stefany:'stefanyloi@hotmail.com' };
-const RESP_NAME  = { viniciu:'Dr. Viniciu', stefany:'Stefany' };
-let editingTaskId = null, draggingId = null;
-
-function getTasks()    { return sharedData.tasks; }
-function saveTasks(t)  { sharedData.tasks = t; scheduleSave(); }
-
-function updateRespNote() {
-  const resp = document.getElementById('t-resp').value;
-  const isNew = !editingTaskId;
-  const note = document.getElementById('email-note');
-  if (isNew) {
-    note.style.display = '';
-    note.textContent = `📧 Ao criar, será aberto um e-mail para notificar ${RESP_NAME[resp]} (${RESP_EMAIL[resp]}).`;
-  } else {
-    note.style.display = 'none';
-  }
-}
-
-function openTaskModal(id) {
-  editingTaskId = id || null;
-  const tasks = getTasks();
-  const t = id ? tasks.find(x=>x.id===id) : null;
-  document.getElementById('modal-task-title').textContent = id ? 'Editar Tarefa' : 'Nova Tarefa';
-  document.getElementById('t-titulo').value = t ? t.titulo : '';
-  document.getElementById('t-desc').value   = t ? (t.desc||'') : '';
-  document.getElementById('t-resp').value   = t ? t.resp  : 'viniciu';
-  document.getElementById('t-col').value    = t ? t.col   : 'aguardando';
-  document.getElementById('btn-save-task').textContent = id ? 'Salvar Alterações' : 'Criar Tarefa';
-  updateRespNote();
-  document.getElementById('modal-task').classList.add('open');
-  setTimeout(()=>document.getElementById('t-titulo').focus(),50);
-}
-
-function saveTask() {
-  const titulo = document.getElementById('t-titulo').value.trim();
-  if (!titulo) { alert('Informe o título da tarefa.'); return; }
-  const resp = document.getElementById('t-resp').value;
-  const col  = document.getElementById('t-col').value;
-  const desc = document.getElementById('t-desc').value.trim();
-  const tasks = getTasks();
-
-  if (editingTaskId) {
-    const idx = tasks.findIndex(x=>x.id===editingTaskId);
-    if (idx>=0) tasks[idx] = {...tasks[idx], titulo, desc, resp, col};
-    editingTaskId = null;
-  } else {
-    const newTask = { id:Date.now(), titulo, desc, resp, col, created:new Date().toLocaleDateString('pt-BR') };
-    tasks.push(newTask);
-    // Abre cliente de e-mail com mensagem pré-preenchida
-    const subj = encodeURIComponent('[Dashboard] Nova tarefa: '+titulo);
-    const body = encodeURIComponent(
-      'Olá, '+RESP_NAME[resp]+'!\n\n'+
-      'Uma nova tarefa foi atribuída a você no Dashboard Processual:\n\n'+
-      '📌 Tarefa: '+titulo+'\n'+
-      (desc ? '📝 Descrição: '+desc+'\n' : '')+
-      '📂 Coluna: '+col.charAt(0).toUpperCase()+col.slice(1)+'\n'+
-      '📅 Criada em: '+newTask.created+'\n\n'+
-      'Acesse o Dashboard Processual para mais detalhes.\n\n— Viniciu Gonçalves Advocacia'
-    );
-    window.open('mailto:'+RESP_EMAIL[resp]+'?subject='+subj+'&body='+body);
-  }
-
-  saveTasks(tasks);
-  closeModal('modal-task');
-  renderKanban();
-}
-
-function deleteTask(id) {
-  if (!confirm('Excluir esta tarefa?')) return;
-  saveTasks(getTasks().filter(t=>t.id!==id));
-  renderKanban();
-}
-
-function moveTask(id, col) {
-  const tasks = getTasks();
-  const t = tasks.find(x=>x.id===id);
-  if (t) { t.col=col; saveTasks(tasks); renderKanban(); }
-}
-
-function renderKanban() {
-  const tasks = getTasks();
-  ['aguardando','fazendo','feito'].forEach(col => {
-    const ct = tasks.filter(t=>t.col===col);
-    document.getElementById('cnt-'+col).textContent = ct.length;
-    document.getElementById('cards-'+col).innerHTML = ct.length
-      ? ct.map(t=>`
-        <div class="kanban-card" draggable="true" id="kc-${t.id}"
-             ondragstart="onDragStart(event,${t.id})" ondragend="onDragEnd(event)">
-          <div class="card-title">${esc(t.titulo)}</div>
-          ${t.desc ? `<div class="card-desc">${esc(t.desc)}</div>` : ''}
-          <div class="card-footer">
-            <span class="card-resp ${t.resp==='viniciu'?'resp-v':'resp-s'}">
-              ${t.resp==='viniciu'?'👨‍⚖️':'👩‍💼'} ${RESP_NAME[t.resp]}
-            </span>
-            <div class="card-actions">
-              <span class="card-date">${t.created||''}</span>
-              <button class="card-btn" onclick="openTaskModal(${t.id})" title="Editar">✏️</button>
-              <button class="card-btn del" onclick="deleteTask(${t.id})" title="Excluir">🗑️</button>
-            </div>
-          </div>
-        </div>`).join('')
-      : '<div class="col-empty">Sem tarefas</div>';
+function exportCSV() {
+  const rows=[['Cliente','Processo','Tipo','Status','Estado atual','Próximo passo','Verificação']];
+  filtered().forEach(d=>{
+    rows.push([getField(d,'cl'),getField(d,'proc'),d.tipo,
+      effStArr(d).map(s=>ST_LABELS[s]||s).join(' + '),
+      getField(d,'res'),getField(d,'prox'),getField(d,'ver')]);
   });
+  const csv=rows.map(r=>r.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(',')).join('\n');
+  const a=document.createElement('a');
+  a.href='data:text/csv;charset=utf-8,'+encodeURIComponent('﻿'+csv);
+  a.download='processos_'+new Date().toISOString().slice(0,10)+'.csv';
+  a.click();
 }
-
-// Drag & Drop Kanban
-function onDragStart(e,id) {
-  draggingId = id;
-  setTimeout(()=>{ const el=document.getElementById('kc-'+id); if(el) el.classList.add('dragging'); },0);
-}
-function onDragEnd() {
-  if (draggingId) { const el=document.getElementById('kc-'+draggingId); if(el) el.classList.remove('dragging'); }
-  document.querySelectorAll('.kanban-col').forEach(c=>c.classList.remove('drag-over'));
-  draggingId = null;
-}
-function onDragOver(e,col) { e.preventDefault(); document.getElementById('col-'+col).classList.add('drag-over'); }
-function onDragLeave(e) { e.currentTarget.classList.remove('drag-over'); }
-function onDrop(e,col) { e.preventDefault(); if(draggingId) moveTask(draggingId,col); draggingId=null; }
-
-// ================================================================
-// ABA AGENDA
-// ================================================================
-let weekOffset = 0;
-function getEvents()   { return sharedData.events; }
-function saveEvents(v) { sharedData.events = v; scheduleSave(); }
-
-function getWeekDays(offset) {
-  const today = new Date();
-  const dow = today.getDay(); // 0=dom
-  const mon = new Date(today);
-  mon.setDate(today.getDate() - (dow===0?6:dow-1) + offset*7);
-  mon.setHours(0,0,0,0);
-  return Array.from({length:7},(_,i)=>{ const d=new Date(mon); d.setDate(mon.getDate()+i); return d; });
-}
-function dkey(d) {
-  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
-}
-
-function changeWeek(delta) { weekOffset+=delta; renderAgenda(); }
-function goToday()         { weekOffset=0; renderAgenda(); }
-
-function openEventModal(dateStr) {
-  document.getElementById('ev-titulo').value = '';
-  document.getElementById('ev-data').value   = dateStr||'';
-  document.getElementById('ev-hora').value   = '';
-  document.getElementById('ev-local').value  = '';
-  document.getElementById('modal-event').classList.add('open');
-  setTimeout(()=>document.getElementById('ev-titulo').focus(),50);
-}
-
-function saveEvent() {
-  const titulo  = document.getElementById('ev-titulo').value.trim();
-  const data_ev = document.getElementById('ev-data').value;
-  if (!titulo||!data_ev) { alert('Preencha o título e a data.'); return; }
-  const hora  = document.getElementById('ev-hora').value;
-  const local = document.getElementById('ev-local').value.trim();
-  const evts  = getEvents();
-  evts.push({ id:Date.now(), titulo, data:data_ev, hora, local });
-  saveEvents(evts);
-  closeModal('modal-event');
-  renderAgenda();
-}
-
-function deleteEvent(id) {
-  if (!confirm('Excluir este compromisso?')) return;
-  saveEvents(getEvents().filter(e=>e.id!==id));
-  renderAgenda();
-}
-
-function renderAgenda() {
-  const days   = getWeekDays(weekOffset);
-  const events = getEvents();
-  const todayK = dkey(new Date());
-  const DN  = ['Seg','Ter','Qua','Qui','Sex','Sáb','Dom'];
-  const MON = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
-
-  const f=days[0], l=days[6];
-  document.getElementById('week-label').textContent =
-    `${f.getDate()} ${MON[f.getMonth()]} — ${l.getDate()} ${MON[l.getMonth()]} ${l.getFullYear()}`;
-
-  document.getElementById('agenda-grid').innerHTML = days.map((day,i) => {
-    const dk    = dkey(day);
-    const isToday = dk===todayK;
-    const dayEvs  = events.filter(e=>e.data===dk)
-                          .sort((a,b)=>(a.hora||'99:99').localeCompare(b.hora||'99:99'));
-    return `<div class="agenda-day${isToday?' today':''}">
-      <div class="agenda-day-header" onclick="openEventModal('${dk}')" title="Clique para adicionar compromisso">
-        <div class="agenda-day-name">${DN[i]}</div>
-        <div class="agenda-day-num">${day.getDate()}</div>
-      </div>
-      <div class="agenda-events">
-        ${dayEvs.map(ev=>`
-          <div class="agenda-event">
-            ${ev.hora ? `<div class="agenda-event-time">${esc(ev.hora)}</div>` : ''}
-            <div class="agenda-event-title">${esc(ev.titulo)}</div>
-            ${ev.local ? `<div class="agenda-event-local">${esc(ev.local)}</div>` : ''}
-            <button class="agenda-event-del" onclick="deleteEvent(${ev.id})" title="Excluir">✕</button>
-          </div>`).join('')}
-        ${!dayEvs.length ? `<div class="agenda-add-hint">clique para adicionar</div>` : ''}
-      </div>
-    </div>`;
-  }).join('');
-}
-
-// ================================================================
-// MODAL GENÉRICO
-// ================================================================
-function closeModal(id) { document.getElementById(id).classList.remove('open'); }
-document.addEventListener('keydown', e => {
-  if (e.key==='Escape') document.querySelectorAll('.modal-overlay.open').forEach(m=>m.classList.remove('open'));
-});
 
 // ================================================================
 // INIT
 // ================================================================
-document.getElementById('hdr-sub').textContent = 'Advogado Criminalista · Atualizado em 04/05/2026 às 08:00';
+function renderAll() { renderStats(); renderFilters(); renderTable(); }
+window.addEventListener('DOMContentLoaded', ()=>{
+  document.getElementById('search').addEventListener('input', e=>{ searchTerm=e.target.value; renderTable(); });
+  initSync();
+});
 
-(async () => {
-  await initSync();   // Conecta ao Firebase (ou modo local se não configurado)
-  renderStats();
-  renderFilters();
-  renderTable();
-  // Firebase usa listeners em tempo real — sem necessidade de polling
-})();
-
-// ================================================================
-// ABA PUBLICAÇÕES
-// ================================================================
-let pubFiltroAtivo = 'todas';
-
-const pubFiltroDefs = [
-  { key: 'todas', label: 'Todas' },
-  { key: 'DJe',   label: 'Diário da Justiça (DJe)' },
-  { key: 'DE',    label: 'Domicílio Eletrônico' },
-  { key: 'PJe',   label: 'Push PJe' },
-  { key: 'nao_lida', label: 'Não lidas' },
-];
-
-function initPubFilters() {
-  const wrap = document.getElementById('pub-filters');
-  if (!wrap) return;
-  wrap.innerHTML = '';
-  pubFiltroDefs.forEach(f => {
-    const btn = document.createElement('button');
-    btn.className = 'filter-btn' + (f.key === pubFiltroAtivo ? ' active' : '');
-    btn.textContent = f.label;
-    btn.onclick = () => { pubFiltroAtivo = f.key; initPubFilters(); renderPublicacoes(); };
-    wrap.appendChild(btn);
-  });
-}
-
-function renderPublicacoes() {
-  initPubFilters();
-  const tbody = document.getElementById('pub-tbody');
-  const empty = document.getElementById('pub-empty');
-  const countEl = document.getElementById('pub-count');
-  const atu = document.getElementById('pub-atualizado');
-  const q = (document.getElementById('pub-search') || {}).value || '';
-  const qLow = q.toLowerCase();
-
-  // Actualizar badge na aba
-  const naoLidas = publicacoes.filter(p => !p.lida).length;
-  const badge = document.getElementById('pub-badge');
-  if (badge) {
-    if (naoLidas > 0) { badge.style.display = ''; badge.textContent = naoLidas; }
-    else { badge.style.display = 'none'; }
-  }
-
-  // Filtrar
-  let lista = publicacoes.slice().sort((a, b) => b.data.localeCompare(a.data) || (b.hora||'').localeCompare(a.hora||''));
-  if (pubFiltroAtivo !== 'todas') {
-    if (pubFiltroAtivo === 'nao_lida') lista = lista.filter(p => !p.lida);
-    else lista = lista.filter(p => p.tipo === pubFiltroAtivo);
-  }
-  if (qLow) {
-    lista = lista.filter(p =>
-      (p.assunto||'').toLowerCase().includes(qLow) ||
-      (p.cliente||'').toLowerCase().includes(qLow) ||
-      (p.proc||'').toLowerCase().includes(qLow) ||
-      (p.conteudo||'').toLowerCase().includes(qLow)
-    );
-  }
-
-  countEl.textContent = lista.length + ' publicação' + (lista.length !== 1 ? 'ões' : '');
-
-  if (lista.length === 0) {
-    tbody.innerHTML = '';
-    empty.style.display = '';
-  } else {
-    empty.style.display = 'none';
-    tbody.innerHTML = lista.map(p => {
-      const tipoClass = p.tipo === 'DJe' ? 'pub-tipo-dje' : p.tipo === 'DE' ? 'pub-tipo-de' : 'pub-tipo-pje';
-      const tipoLabel = p.tipo === 'DJe' ? 'DJe' : p.tipo === 'DE' ? 'Dom. Eletrônico' : 'Push PJe';
-      const lidaClass = p.lida ? 'pub-lida' : 'pub-nao-lida';
-      const dataFmt = p.data ? p.data.split('-').reverse().join('/') : '—';
-      const hora = p.hora ? ' ' + p.hora : '';
-      return `<tr class="${lidaClass}">
-        <td><span class="pub-status-dot" title="${p.lida ? 'Lida' : 'Não lida'}"></span></td>
-        <td class="pub-data">${dataFmt}${hora}</td>
-        <td><span class="pub-tipo-pill ${tipoClass}">${tipoLabel}</span></td>
-        <td><span style="font-size:13px;font-weight:500;">${esc(p.cliente||'—')}</span></td>
-        <td class="pub-proc">${esc(p.proc||'—')}</td>
-        <td>
-          <div class="pub-assunto">${esc(p.assunto||'—')}</div>
-          ${p.conteudo ? `<div style="font-size:12px;color:var(--text2);margin-top:3px;">${esc(p.conteudo)}</div>` : ''}
-        </td>
-        <td>
-          <button class="pub-mark-btn" onclick="togglePubLida(${p.id})">${p.lida ? 'Marcar não lida' : 'Marcar lida'}</button>
-        </td>
-      </tr>`;
-    }).join('');
-  }
-
-  if (atu) atu.textContent = pubAtualizadoEm ? 'Última atualização pela skill: ' + pubAtualizadoEm : 'Ainda não atualizado pela skill.';
-}
-
-function togglePubLida(id) {
-  const pub = publicacoes.find(p => p.id === id);
-  if (pub) { pub.lida = !pub.lida; renderPublicacoes(); }
-}
 </script>
 </body>
 </html>
