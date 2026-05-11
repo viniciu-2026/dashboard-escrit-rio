@@ -5,7 +5,7 @@ Dashboard privado para acompanhamento de processos com sincronizacao em tempo re
 ## O que mudou em 2026-05-11
 
 - O `index.html` publico nao contem mais a lista real de processos no codigo.
-- O acesso agora exige login pelo Firebase Authentication.
+- O acesso agora exige login com Google pelo Firebase Authentication.
 - Os processos passam a ser lidos e gravados em `dashboard/processes` no Realtime Database.
 - Cada criacao, edicao, importacao ou remocao registra evento em `dashboard/history`.
 - Foi criado um ponto de restauracao antes das mudancas.
@@ -24,13 +24,24 @@ Para restaurar pelo GitHub, abra a branch `backup/pre-seguranca-2026-05-11`, cop
 ## Configuracao obrigatoria no Firebase
 
 1. Abra o Firebase Console do projeto `dashboard-vg`.
-2. Va em Authentication > Sign-in method.
-3. Ative Email/Password.
-4. Crie usuarios para voce e para sua assistente em Authentication > Users.
-5. Va em Realtime Database > Rules.
-6. Use regras restritas por UID.
+2. Va em Authentication > Metodo de login.
+3. Ative o provedor Google.
+4. Em Realtime Database > Rules, restrinja acesso aos e-mails ou UIDs autorizados.
 
-Exemplo de regras:
+Exemplo simples por e-mail:
+
+```json
+{
+  "rules": {
+    "dashboard": {
+      ".read": "auth != null && (auth.token.email === 'SEU_EMAIL@gmail.com' || auth.token.email === 'EMAIL_DA_ASSISTENTE@gmail.com')",
+      ".write": "auth != null && (auth.token.email === 'SEU_EMAIL@gmail.com' || auth.token.email === 'EMAIL_DA_ASSISTENTE@gmail.com')"
+    }
+  }
+}
+```
+
+Exemplo mais rigido por UID:
 
 ```json
 {
@@ -43,7 +54,7 @@ Exemplo de regras:
 }
 ```
 
-Troque `SEU_UID` e `UID_DA_ASSISTENTE` pelos UIDs exibidos em Authentication > Users.
+Depois do primeiro login de cada pessoa, os usuarios aparecem em Authentication > Usuarios com seus respectivos UIDs.
 
 ## Migracao dos processos antigos
 
@@ -70,7 +81,7 @@ Depois da importacao, os dados ficam no Firebase e sincronizam em tempo real par
 
 ## Uso diario
 
-- Entre com e-mail e senha cadastrados no Firebase Authentication.
+- Entre com sua conta Google autorizada.
 - Use `Novo processo` para cadastrar.
 - Use `Editar` para atualizar campos e status.
 - Use `Historico` para ver os eventos recentes.
