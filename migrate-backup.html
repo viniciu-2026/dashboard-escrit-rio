@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Migrar dados do backup</title>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+<style>
+body{margin:0;background:#0a0a0a;color:#eee;font-family:Inter,Arial,sans-serif;display:grid;place-items:center;min-height:100vh;padding:24px}.box{width:min(720px,100%);background:#111;border:1px solid #272727;border-radius:10px;padding:24px;box-shadow:0 18px 60px rgba(0,0,0,.45)}h1{margin:0 0 8px;font-size:22px}p{color:#aaa;line-height:1.55}.warn{border:1px solid rgba(201,168,76,.35);background:rgba(201,168,76,.08);padding:12px;border-radius:8px;color:#e0c068}.ok{color:#52b788}.err{color:#ff8585;white-space:pre-wrap}.muted{color:#888;font-size:13px}button{border:1px solid #333;background:#181818;color:#eee;border-radius:8px;padding:10px 14px;font-weight:700;cursor:pointer;margin:6px 6px 6px 0}button.primary{background:rgba(201,168,76,.14);border-color:rgba(201,168,76,.45);color:#c9a84c}button:hover{background:#222}code{background:#181818;border:1px solid #272727;border-radius:4px;padding:2px 5px}.row{margin-top:16px}.log{margin-top:16px;border-top:1px solid #272727;padding-top:12px;min-height:50px}
+</style>
+</head>
+<body>
+<div class="box">
+  <h1>Migrar dados do backup</h1>
+  <p>Esta pagina importa a lista antiga de processos da branch <code>backup/pre-seguranca-2026-05-11</code> para o Firebase em <code>dashboard/processes</code>.</p>
+  <p class="warn">Use uma unica vez. Ela nao apaga o backup e nao remove dados ja cadastrados; processos com o mesmo ID serao atualizados no Firebase.</p>
+  <div class="row">
+    <button id="login" class="primary">Entrar com Google</button>
+    <button id="migrate" disabled>Migrar dados agora</button>
+    <button id="logout" disabled>Sair</button>
+  </div>
+  <div id="status" class="log muted">Aguardando login.</div>
+</div>
+<script>
+const FIREBASE_CONFIG={apiKey:"AIzaSyAYpDwvo4lvhW1UE6PrqgQNuHENR0GLCbI",authDomain:"dashboard-vg.firebaseapp.com",databaseURL:"https://dashboard-vg-default-rtdb.firebaseio.com",projectId:"dashboard-vg",storageBucket:"dashboard-vg.firebasestorage.app",messagingSenderId:"336314934763",appId:"1:336314934763:web:7f38316dfab77ccdff25ae"};
+const BACKUP_URL='https://raw.githubusercontent.com/viniciu-2026/dashboard-escrit-rio/backup/pre-seguranca-2026-05-11/index.html';
+const app=firebase.initializeApp(FIREBASE_CONFIG);
+const auth=firebase.auth(app);
+const db=firebase.database(app);
+const statusEl=document.getElementById('status');
+function status(msg,cls='muted'){statusEl.className='log '+cls;statusEl.textContent=msg}
+function normalizeStatus(st){if(Array.isArray(st))return st.length?st:['aguardando'];return st?[st]:['aguardando']}
+function normalizeTipo(tipo){return tipo==='Cível'?'Civel':(tipo||'Criminal')}
+function getDataArray(source){
+  const start=source.indexOf('const data =');
+  if(start<0)throw new Error('Nao encontrei const data no backup.');
+  const arrayStart=source.indexOf('[',start);
+  const marker=';\n\ufeffconst FIREBASE_CONFIG';
+  let arrayEnd=source.indexOf(marker,arrayStart);
+  if(arrayEnd<0)arrayEnd=source.indexOf(';\nconst FIREBASE_CONFIG',arrayStart);
+  if(arrayEnd<0)throw new Error('Nao encontrei o fim da lista de dados no backup.');
+  const arrayText=source.slice(arrayStart,arrayEnd);
+  return Function('return ('+arrayText+');')();
+}
+auth.onAuthStateChanged(user=>{
+  const on=!!user;
+  document.getElementById('migrate').disabled=!on;
+  document.getElementById('logout').disabled=!on;
+  document.getElementById('login').disabled=on;
+  status(on?'Logado como '+(user.email||user.uid)+'. Pode migrar.':'Aguardando login.',on?'ok':'muted');
+});
+document.getElementById('login').onclick=async()=>{
+  try{const provider=new firebase.auth.GoogleAuthProvider();provider.setCustomParameters({prompt:'select_account'});await auth.signInWithPopup(provider)}
+  catch(e){status('Falha no login: '+e.message,'err')}
+};
+document.getElementById('logout').onclick=()=>auth.signOut();
+document.getElementById('migrate').onclick=async()=>{
+  try{
+    status('Baixando backup antigo...');
+    const html=await fetch(BACKUP_URL,{cache:'no-store'}).then(r=>{if(!r.ok)throw new Error('HTTP '+r.status);return r.text()});
+    const arr=getDataArray(html);
+    if(!Array.isArray(arr)||!arr.length)throw new Error('Lista vazia ou invalida.');
+    status('Preparando '+arr.length+' processos...');
+    const user=auth.currentUser;
+    const now=new Date().toISOString();
+    const updates={};
+    arr.forEach((p,i)=>{
+      const id=String(p.id||Date.now()+i);
+      updates[id]={
+        cl:p.cl||'',proc:p.proc||'',tipo:normalizeTipo(p.tipo),st:normalizeStatus(p.st),
+        res:p.res||'',prox:p.prox||'',ver:p.ver||'',updatedAt:now,updatedBy:user.email||'migracao',updatedByUid:user.uid
+      };
+    });
+    await db.ref('dashboard/processes').update(updates);
+    await db.ref('dashboard/history').push({action:'migration-from-backup',count:arr.length,updatedAt:now,updatedBy:user.email||'migracao',updatedByUid:user.uid});
+    status('Migracao concluida: '+arr.length+' processos gravados no Firebase. Volte ao dashboard e atualize a pagina.','ok');
+  }catch(e){status('Erro na migracao:\n'+(e.stack||e.message),'err')}
+};
+</script>
+</body>
+</html>
