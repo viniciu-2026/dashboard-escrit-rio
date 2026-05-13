@@ -33,7 +33,24 @@ jobs:
         with:
           node-version: "22"
 
+      - name: Validar Secrets obrigatorios
+        shell: pwsh
+        run: |
+          $missing = @()
+          foreach ($name in @("GOVBR_CPF", "GOVBR_PASSWORD", "GMAIL_REFRESH_TOKEN")) {
+            if ([string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable($name))) {
+              $missing += $name
+            }
+          }
+          if ([string]::IsNullOrWhiteSpace($env:FIREBASE_DATABASE_AUTH_TOKEN) -and [string]::IsNullOrWhiteSpace($env:FIREBASE_SERVICE_ACCOUNT_JSON)) {
+            $missing += "FIREBASE_DATABASE_AUTH_TOKEN ou FIREBASE_SERVICE_ACCOUNT_JSON"
+          }
+          if ($missing.Count -gt 0) {
+            throw "Secrets obrigatorios ausentes: $($missing -join ', ')"
+          }
+
       - name: Instalar Playwright
+        timeout-minutes: 10
         run: |
           npm config set fetch-retries 5
           npm config set fetch-retry-factor 2
@@ -52,6 +69,7 @@ jobs:
 
       - name: Rodar atualizacao processual
         shell: pwsh
+        timeout-minutes: 15
         run: ./tools/run-process-update-github.ps1
 
       - name: Publicar relatorio de automacao
