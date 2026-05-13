@@ -209,6 +209,7 @@ $environment = [pscustomobject]@{
     loadedSessionConfig = $loadedSessionConfig
     hasTribunalBrowserWs = -not [string]::IsNullOrWhiteSpace($env:TRIBUNAL_BROWSER_WS)
     hasTribunalProfileDir = -not [string]::IsNullOrWhiteSpace($env:TRIBUNAL_PROFILE_DIR)
+    tribunalChromeProfileDirectory = $env:TRIBUNAL_CHROME_PROFILE_DIRECTORY
     tribunalProfileDirExists = -not [string]::IsNullOrWhiteSpace($env:TRIBUNAL_PROFILE_DIR) -and (Test-Path -LiteralPath $env:TRIBUNAL_PROFILE_DIR -PathType Container)
     tribunalSessionConfirmed = $env:TRIBUNAL_SESSION_CONFIRMED -eq "1"
     hasGmailConnectorHint = -not [string]::IsNullOrWhiteSpace($env:GMAIL_CONNECTOR_AVAILABLE)

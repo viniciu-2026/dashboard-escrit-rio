@@ -1,5 +1,7 @@
 param(
     [string]$ProfileDir = (Join-Path $env:USERPROFILE ".codex\process-automation\tribunal-profile"),
+    [string]$ChromeProfileDirectory = "",
+    [switch]$UseExistingChromeUserData,
     [int]$RemoteDebuggingPort = 9227,
     [switch]$ConfirmAfterLogin
 )
@@ -29,15 +31,28 @@ function Find-Browser {
 }
 
 New-Item -ItemType Directory -Force -Path $configDir | Out-Null
-New-Item -ItemType Directory -Force -Path $ProfileDir | Out-Null
+
+if ($UseExistingChromeUserData) {
+    $ProfileDir = Join-Path $env:LOCALAPPDATA "Google\Chrome\User Data"
+}
+
+if (-not (Test-Path -LiteralPath $ProfileDir -PathType Container)) {
+    New-Item -ItemType Directory -Force -Path $ProfileDir | Out-Null
+}
 
 $confirmed = if ($ConfirmAfterLogin) { "1" } else { "0" }
-@(
+$configLines = @(
     "# Arquivo local nao versionado. Nao colocar senhas aqui.",
     "TRIBUNAL_PROFILE_DIR=$ProfileDir",
     "TRIBUNAL_SESSION_CONFIRMED=$confirmed",
     "# Opcional: TRIBUNAL_BROWSER_WS=ws://host:port/devtools/browser/id"
-) | Set-Content -LiteralPath $configPath -Encoding UTF8
+)
+
+if (-not [string]::IsNullOrWhiteSpace($ChromeProfileDirectory)) {
+    $configLines += "TRIBUNAL_CHROME_PROFILE_DIRECTORY=$ChromeProfileDirectory"
+}
+
+$configLines | Set-Content -LiteralPath $configPath -Encoding UTF8
 
 $browser = Find-Browser
 $urls = @(
@@ -51,7 +66,13 @@ $arguments = @(
     "--remote-debugging-port=$RemoteDebuggingPort",
     "--no-first-run",
     "--no-default-browser-check"
-) + $urls
+)
+
+if (-not [string]::IsNullOrWhiteSpace($ChromeProfileDirectory)) {
+    $arguments += "--profile-directory=$ChromeProfileDirectory"
+}
+
+$arguments += $urls
 
 Start-Process -FilePath $browser -ArgumentList $arguments
 
@@ -59,6 +80,7 @@ Start-Process -FilePath $browser -ArgumentList $arguments
     ok = $true
     configPath = $configPath
     profileDir = $ProfileDir
+    chromeProfileDirectory = $ChromeProfileDirectory
     remoteDebuggingPort = $RemoteDebuggingPort
     sessionConfirmed = $confirmed
     nextStep = "Faca login nos tribunais/GOV no navegador aberto. Depois rode este script com -ConfirmAfterLogin para marcar TRIBUNAL_SESSION_CONFIRMED=1."

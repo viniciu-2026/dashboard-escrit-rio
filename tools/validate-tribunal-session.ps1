@@ -52,6 +52,7 @@ $sessionReady = (-not [string]::IsNullOrWhiteSpace($env:TRIBUNAL_BROWSER_WS)) -o
     hasTribunalBrowserWs = -not [string]::IsNullOrWhiteSpace($env:TRIBUNAL_BROWSER_WS)
     browserWsCheck = $wsCheck
     hasTribunalProfileDir = -not [string]::IsNullOrWhiteSpace($env:TRIBUNAL_PROFILE_DIR)
+    tribunalChromeProfileDirectory = $env:TRIBUNAL_CHROME_PROFILE_DIRECTORY
     tribunalProfileDirExists = $profileExists
     tribunalSessionConfirmed = $env:TRIBUNAL_SESSION_CONFIRMED -eq "1"
     message = if ($sessionReady) { "Sessao de tribunal pronta para o preflight." } elseif (-not $loaded) { "Arquivo local de sessao ainda nao existe. Rode tools\\prepare-tribunal-session.ps1 para preparar." } else { "Sessao de tribunal ainda nao esta pronta para automacao." }
