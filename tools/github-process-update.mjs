@@ -313,10 +313,20 @@ async function main() {
     report.eligibleCnjs = eligible.length;
     report.maxVerificationPtBr = maxVerification || null;
     report.todayPtBr = todayPtBr();
-    report.gmail = await discoverGmailPushes({
-      fromPtBr: maxVerification || todayPtBr(),
-      dashboardByCnj
-    });
+    try {
+      report.gmail = await discoverGmailPushes({
+        fromPtBr: maxVerification || todayPtBr(),
+        dashboardByCnj
+      });
+    } catch (error) {
+      report.gmail = {
+        ok: false,
+        status: 'blocked',
+        reason: 'Falha ao consultar Gmail/pushes.',
+        error: String(error.message || error)
+      };
+      report.blockers.push('Nao foi possivel consultar Gmail/pushes; a descoberta de movimentacoes fica incompleta.');
+    }
     report.consolidated = {
       status: 'teor-pendente',
       reason: 'Processos descobertos por push/Gmail precisam ser abertos no tribunal respectivo antes de qualquer atualizacao conclusiva do dashboard.',
