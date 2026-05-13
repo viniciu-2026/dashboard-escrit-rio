@@ -6,6 +6,82 @@ $ErrorActionPreference = "Stop"
 $processesUrl = "https://dashboard-vg-default-rtdb.firebaseio.com/dashboard/processes.json"
 $cnjPattern = "\b\d{7}-\d{2}\.\d{4}\.\d\.\d{2}\.\d{4}\b"
 
+function ConvertFrom-JsonStrict {
+    param([string]$Text, [string]$Method)
+    if ([string]::IsNullOrWhiteSpace($Text)) {
+        throw "$Method retornou resposta vazia."
+    }
+    return $Text | ConvertFrom-Json
+}
+
+function Invoke-FirebaseRead {
+    param([string]$Url)
+
+    $errors = @()
+
+    try {
+        return [pscustomobject]@{
+            method = "Invoke-RestMethod"
+            data = Invoke-RestMethod -Uri $Url -Method Get -TimeoutSec 45 -Headers @{ "Cache-Control" = "no-cache" }
+            errors = $errors
+        }
+    } catch {
+        $errors += "Invoke-RestMethod: $($_.Exception.Message)"
+    }
+
+    try {
+        $response = Invoke-WebRequest -Uri $Url -Method Get -TimeoutSec 45 -UseBasicParsing -Headers @{ "Cache-Control" = "no-cache" }
+        return [pscustomobject]@{
+            method = "Invoke-WebRequest"
+            data = ConvertFrom-JsonStrict -Text ([string]$response.Content) -Method "Invoke-WebRequest"
+            errors = $errors
+        }
+    } catch {
+        $errors += "Invoke-WebRequest: $($_.Exception.Message)"
+    }
+
+    $curlPath = Get-Command curl.exe -ErrorAction SilentlyContinue
+    if ($curlPath) {
+        try {
+            $curlOutput = & $curlPath.Source --silent --show-error --fail --location --connect-timeout 15 --max-time 45 --tlsv1.2 --header "Cache-Control: no-cache" $Url 2>&1
+            if ($LASTEXITCODE -ne 0) {
+                throw "curl.exe saiu com codigo $LASTEXITCODE`: $($curlOutput -join [Environment]::NewLine)"
+            }
+            return [pscustomobject]@{
+                method = "curl.exe"
+                data = ConvertFrom-JsonStrict -Text (($curlOutput | ForEach-Object { [string]$_ }) -join [Environment]::NewLine) -Method "curl.exe"
+                errors = $errors
+            }
+        } catch {
+            $errors += "curl.exe: $($_.Exception.Message)"
+        }
+    } else {
+        $errors += "curl.exe: nao encontrado no PATH."
+    }
+
+    $client = $null
+    try {
+        Add-Type -AssemblyName System.Net.Http
+        $handler = New-Object System.Net.Http.HttpClientHandler
+        $client = New-Object System.Net.Http.HttpClient($handler)
+        $client.Timeout = [TimeSpan]::FromSeconds(45)
+        $client.DefaultRequestHeaders.CacheControl = New-Object System.Net.Http.Headers.CacheControlHeaderValue
+        $client.DefaultRequestHeaders.CacheControl.NoCache = $true
+        $text = $client.GetStringAsync($Url).GetAwaiter().GetResult()
+        return [pscustomobject]@{
+            method = ".NET HttpClient"
+            data = ConvertFrom-JsonStrict -Text $text -Method ".NET HttpClient"
+            errors = $errors
+        }
+    } catch {
+        $errors += ".NET HttpClient: $($_.Exception.Message)"
+    } finally {
+        if ($client) { $client.Dispose() }
+    }
+
+    throw ($errors -join " | ")
+}
+
 function ConvertTo-DatePtBr {
     param([string]$Value)
     if ([string]::IsNullOrWhiteSpace($Value)) { return $null }
@@ -51,7 +127,8 @@ $environment = [pscustomobject]@{
 }
 
 try {
-    $raw = Invoke-RestMethod -Uri $processesUrl -Method Get -TimeoutSec 45
+    $firebaseRead = Invoke-FirebaseRead -Url $processesUrl
+    $raw = $firebaseRead.data
 } catch {
     $result = [pscustomobject]@{
         ok = $false
@@ -108,6 +185,8 @@ foreach ($process in $processes) {
 $result = [pscustomobject]@{
     ok = $true
     source = $processesUrl
+    readMethod = $firebaseRead.method
+    readFallbackErrors = @($firebaseRead.errors)
     totalProcesses = $processes.Count
     eligibleCnjs = $eligible.Count
     maxVerificationPtBr = if ($null -ne $maxVerification) { $maxVerification.ToString("dd/MM/yyyy") } else { $null }
