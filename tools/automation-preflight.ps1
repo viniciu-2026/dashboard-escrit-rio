@@ -43,7 +43,7 @@ function Invoke-FirebaseRead {
     $curlPath = Get-Command curl.exe -ErrorAction SilentlyContinue
     if ($curlPath) {
         try {
-            $curlOutput = & $curlPath.Source --silent --show-error --fail --location --connect-timeout 15 --max-time 45 --tlsv1.2 --header "Cache-Control: no-cache" $Url 2>&1
+            $curlOutput = & $curlPath.Source --silent --show-error --fail --location --connect-timeout 15 --max-time 45 --tlsv1.2 --ssl-no-revoke --header "Cache-Control: no-cache" $Url 2>&1
             if ($LASTEXITCODE -ne 0) {
                 throw "curl.exe saiu com codigo $LASTEXITCODE`: $($curlOutput -join [Environment]::NewLine)"
             }
@@ -57,6 +57,56 @@ function Invoke-FirebaseRead {
         }
     } else {
         $errors += "curl.exe: nao encontrado no PATH."
+    }
+
+    $nodePath = Get-Command node.exe -ErrorAction SilentlyContinue
+    if (-not $nodePath) {
+        $nodePath = Get-Command node -ErrorAction SilentlyContinue
+    }
+    if ($nodePath) {
+        $nodeScript = $null
+        try {
+            $nodeScript = Join-Path ([IO.Path]::GetTempPath()) ("firebase-read-" + [guid]::NewGuid().ToString("N") + ".js")
+            $script = @'
+const https = require('https');
+const url = process.argv[2];
+const req = https.get(url, { headers: { 'Cache-Control': 'no-cache' }, timeout: 45000 }, (res) => {
+  let body = '';
+  res.setEncoding('utf8');
+  res.on('data', chunk => body += chunk);
+  res.on('end', () => {
+    if (res.statusCode < 200 || res.statusCode >= 300) {
+      console.error(`HTTP ${res.statusCode}: ${body.slice(0, 500)}`);
+      process.exit(2);
+    }
+    process.stdout.write(body);
+  });
+});
+req.on('timeout', () => req.destroy(new Error('timeout')));
+req.on('error', err => {
+  console.error(err && err.stack ? err.stack : String(err));
+  process.exit(1);
+});
+'@
+            Set-Content -LiteralPath $nodeScript -Value $script -Encoding UTF8
+            $nodeOutput = & $nodePath.Source $nodeScript $Url 2>&1
+            if ($LASTEXITCODE -ne 0) {
+                throw "node saiu com codigo $LASTEXITCODE`: $($nodeOutput -join [Environment]::NewLine)"
+            }
+            return [pscustomobject]@{
+                method = "node https"
+                data = ConvertFrom-JsonStrict -Text (($nodeOutput | ForEach-Object { [string]$_ }) -join [Environment]::NewLine) -Method "node https"
+                errors = $errors
+            }
+        } catch {
+            $errors += "node https: $($_.Exception.Message)"
+        } finally {
+            if ($nodeScript -and (Test-Path -LiteralPath $nodeScript)) {
+                Remove-Item -LiteralPath $nodeScript -Force -ErrorAction SilentlyContinue
+            }
+        }
+    } else {
+        $errors += "node https: node nao encontrado no PATH."
     }
 
     $client = $null
