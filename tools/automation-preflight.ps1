@@ -181,8 +181,10 @@ function Get-TextProperty {
 $environment = [pscustomobject]@{
     hasTribunalBrowserWs = -not [string]::IsNullOrWhiteSpace($env:TRIBUNAL_BROWSER_WS)
     hasTribunalProfileDir = -not [string]::IsNullOrWhiteSpace($env:TRIBUNAL_PROFILE_DIR)
+    tribunalProfileDirExists = -not [string]::IsNullOrWhiteSpace($env:TRIBUNAL_PROFILE_DIR) -and (Test-Path -LiteralPath $env:TRIBUNAL_PROFILE_DIR -PathType Container)
     hasGmailConnectorHint = -not [string]::IsNullOrWhiteSpace($env:GMAIL_CONNECTOR_AVAILABLE)
 }
+$hasTribunalSession = $environment.hasTribunalBrowserWs -or $environment.tribunalProfileDirExists
 
 try {
     $firebaseRead = Invoke-FirebaseRead -Url $processesUrl
@@ -199,8 +201,11 @@ try {
         environment = $environment
         blockers = @(
             "Nao foi possivel ler o dashboard/Firebase no endpoint publicado; sem isso nao ha periodo confiavel para a atualizacao."
-            if (-not $environment.hasTribunalBrowserWs -and -not $environment.hasTribunalProfileDir) {
+            if (-not $hasTribunalSession) {
                 "Ambiente automatico sem TRIBUNAL_BROWSER_WS ou TRIBUNAL_PROFILE_DIR; nao ha sessao autenticada de tribunal para leitura de teor."
+            }
+            if ($environment.hasTribunalProfileDir -and -not $environment.tribunalProfileDirExists) {
+                "TRIBUNAL_PROFILE_DIR foi informado, mas o diretorio nao existe no ambiente automatico."
             }
             if (-not $environment.hasGmailConnectorHint) {
                 "Ambiente automatico sem indicio de conector Gmail disponivel; pushes podem ficar indisponiveis."
@@ -252,8 +257,11 @@ $result = [pscustomobject]@{
     todayPtBr = (Get-Date).ToString("dd/MM/yyyy")
     environment = $environment
     blockers = @(
-        if (-not $environment.hasTribunalBrowserWs -and -not $environment.hasTribunalProfileDir) {
+        if (-not $hasTribunalSession) {
             "Ambiente automatico sem TRIBUNAL_BROWSER_WS ou TRIBUNAL_PROFILE_DIR; nao ha sessao autenticada de tribunal para leitura de teor."
+        }
+        if ($environment.hasTribunalProfileDir -and -not $environment.tribunalProfileDirExists) {
+            "TRIBUNAL_PROFILE_DIR foi informado, mas o diretorio nao existe no ambiente automatico."
         }
         if (-not $environment.hasGmailConnectorHint) {
             "Ambiente automatico sem indicio de conector Gmail disponivel; pushes podem ficar indisponiveis."
