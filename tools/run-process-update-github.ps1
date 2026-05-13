@@ -66,29 +66,30 @@ function Invoke-ProcessWithTimeout {
     Remove-Item -LiteralPath $OutputPath, $errorPath -Force -ErrorAction SilentlyContinue
 
     Write-Host "Iniciando $Name..."
-    $quotedArguments = @($ArgumentList | ForEach-Object {
-        $argument = [string]$_
-        if ($argument -match '[\s"]') {
-            '"' + ($argument -replace '"', '\"') + '"'
-        } else {
-            $argument
+    $job = Start-Job -ScriptBlock {
+        param([string]$InnerFilePath, [string[]]$InnerArgumentList)
+        $output = & $InnerFilePath @InnerArgumentList 2>&1
+        [pscustomobject]@{
+            exitCode = $LASTEXITCODE
+            output = ($output | ForEach-Object { [string]$_ }) -join [Environment]::NewLine
         }
-    }) -join " "
-    $process = Start-Process -FilePath $FilePath -ArgumentList $quotedArguments -NoNewWindow -PassThru -RedirectStandardOutput $OutputPath -RedirectStandardError $errorPath
-    $finished = $process.WaitForExit($TimeoutSeconds * 1000)
+    } -ArgumentList $FilePath, $ArgumentList
 
-    if (-not $finished) {
-        try { $process.Kill($true) } catch { try { $process.Kill() } catch {} }
+    $finishedJob = Wait-Job -Job $job -Timeout $TimeoutSeconds
+    if (-not $finishedJob) {
+        Stop-Job -Job $job -ErrorAction SilentlyContinue
+        Remove-Job -Job $job -Force -ErrorAction SilentlyContinue
         throw "$Name excedeu timeout de $TimeoutSeconds segundos."
     }
-    $process.Refresh()
 
-    $stdout = if (Test-Path -LiteralPath $OutputPath) { Get-Content -LiteralPath $OutputPath -Raw } else { "" }
-    $stderr = if (Test-Path -LiteralPath $errorPath) { Get-Content -LiteralPath $errorPath -Raw } else { "" }
-    $combined = (@($stdout, $stderr) | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }) -join [Environment]::NewLine
+    $jobResult = Receive-Job -Job $job
+    Remove-Job -Job $job -Force -ErrorAction SilentlyContinue
+    $combined = if ($jobResult) { [string]$jobResult.output } else { "" }
+    $combined | Set-Content -LiteralPath $OutputPath -Encoding UTF8
+    "" | Set-Content -LiteralPath $errorPath -Encoding UTF8
 
     return [pscustomobject]@{
-        exitCode = $process.ExitCode
+        exitCode = if ($jobResult) { $jobResult.exitCode } else { $null }
         output = $combined
     }
 }
