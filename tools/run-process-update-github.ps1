@@ -53,6 +53,46 @@ function Get-PowerShellExecutable {
     throw "Nenhum executavel PowerShell encontrado no ambiente."
 }
 
+function Invoke-ProcessWithTimeout {
+    param(
+        [string]$FilePath,
+        [string[]]$ArgumentList,
+        [int]$TimeoutSeconds,
+        [string]$Name,
+        [string]$OutputPath
+    )
+
+    $errorPath = "$OutputPath.err"
+    Remove-Item -LiteralPath $OutputPath, $errorPath -Force -ErrorAction SilentlyContinue
+
+    Write-Host "Iniciando $Name..."
+    $quotedArguments = @($ArgumentList | ForEach-Object {
+        $argument = [string]$_
+        if ($argument -match '[\s"]') {
+            '"' + ($argument -replace '"', '\"') + '"'
+        } else {
+            $argument
+        }
+    }) -join " "
+    $process = Start-Process -FilePath $FilePath -ArgumentList $quotedArguments -NoNewWindow -PassThru -RedirectStandardOutput $OutputPath -RedirectStandardError $errorPath
+    $finished = $process.WaitForExit($TimeoutSeconds * 1000)
+
+    if (-not $finished) {
+        try { $process.Kill($true) } catch { try { $process.Kill() } catch {} }
+        throw "$Name excedeu timeout de $TimeoutSeconds segundos."
+    }
+    $process.Refresh()
+
+    $stdout = if (Test-Path -LiteralPath $OutputPath) { Get-Content -LiteralPath $OutputPath -Raw } else { "" }
+    $stderr = if (Test-Path -LiteralPath $errorPath) { Get-Content -LiteralPath $errorPath -Raw } else { "" }
+    $combined = (@($stdout, $stderr) | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }) -join [Environment]::NewLine
+
+    return [pscustomobject]@{
+        exitCode = $process.ExitCode
+        output = $combined
+    }
+}
+
 if (-not (Test-Path -LiteralPath $runnerPath)) {
     throw "Runner local nao encontrado em $runnerPath"
 }
@@ -62,11 +102,12 @@ if (-not (Test-Path -LiteralPath $nodeRunnerPath)) {
 
 $startedAt = (Get-Date).ToString("s")
 $powershellExe = Get-PowerShellExecutable
-$preflightText = & $powershellExe -NoProfile -ExecutionPolicy Bypass -File $runnerPath 2>&1
-$preflightExit = $LASTEXITCODE
-$preflightJoined = ($preflightText | ForEach-Object { [string]$_ }) -join [Environment]::NewLine
+$preflightRun = Invoke-ProcessWithTimeout -FilePath $powershellExe -ArgumentList @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $runnerPath) -TimeoutSeconds 180 -Name "preflight" -OutputPath (Join-Path $reportDir "preflight-output.txt")
+$preflightExit = $preflightRun.exitCode
+$preflightJoined = $preflightRun.output
 $preflightReportPath = Join-Path $reportDir "preflight.json"
 $preflightJoined | Set-Content -LiteralPath $preflightReportPath -Encoding UTF8
+Write-Host "Preflight finalizado com codigo $preflightExit."
 
 try {
     $preflight = $preflightJoined | ConvertFrom-Json
@@ -99,10 +140,11 @@ if (-not $preflight.ok) {
     exit 2
 }
 
-$nodeOutput = & node $nodeRunnerPath --report-dir $reportDir 2>&1
-$nodeExit = $LASTEXITCODE
-$nodeJoined = ($nodeOutput | ForEach-Object { [string]$_ }) -join [Environment]::NewLine
+$nodeRun = Invoke-ProcessWithTimeout -FilePath "node" -ArgumentList @($nodeRunnerPath, "--report-dir", $reportDir) -TimeoutSeconds 180 -Name "runner Node/Playwright" -OutputPath (Join-Path $reportDir "node-output.txt")
+$nodeExit = $nodeRun.exitCode
+$nodeJoined = $nodeRun.output
 $nodeJoined | Set-Content -LiteralPath (Join-Path $reportDir "node-output.txt") -Encoding UTF8
+Write-Host "Runner Node/Playwright finalizado com codigo $nodeExit."
 
 try {
     $nodeReport = $nodeJoined | ConvertFrom-Json
