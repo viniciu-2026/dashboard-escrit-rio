@@ -59,14 +59,22 @@ function Invoke-FirebaseRead {
         $errors += "curl.exe: nao encontrado no PATH."
     }
 
-    $nodePath = Get-Command node.exe -ErrorAction SilentlyContinue
-    if (-not $nodePath) {
-        $nodePath = Get-Command node -ErrorAction SilentlyContinue
+    $nodeCommand = $null
+    foreach ($candidate in @("node.exe", "node")) {
+        $resolved = Get-Command $candidate -ErrorAction SilentlyContinue
+        if ($resolved) {
+            if ($resolved.Source -and (Test-Path -LiteralPath $resolved.Source)) {
+                $nodeCommand = $resolved.Source
+            } else {
+                $nodeCommand = $candidate
+            }
+            break
+        }
     }
-    if ($nodePath) {
+    if ($nodeCommand) {
         $nodeScript = $null
         try {
-            $nodeScript = Join-Path ([IO.Path]::GetTempPath()) ("firebase-read-" + [guid]::NewGuid().ToString("N") + ".js")
+            $nodeScript = Join-Path $PSScriptRoot ("firebase-read-" + [guid]::NewGuid().ToString("N") + ".js")
             $script = @'
 const https = require('https');
 const url = process.argv[2];
@@ -89,7 +97,7 @@ req.on('error', err => {
 });
 '@
             Set-Content -LiteralPath $nodeScript -Value $script -Encoding UTF8
-            $nodeOutput = & $nodePath.Source $nodeScript $Url 2>&1
+            $nodeOutput = & $nodeCommand $nodeScript $Url 2>&1
             if ($LASTEXITCODE -ne 0) {
                 throw "node saiu com codigo $LASTEXITCODE`: $($nodeOutput -join [Environment]::NewLine)"
             }
