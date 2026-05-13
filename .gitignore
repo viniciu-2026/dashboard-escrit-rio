@@ -1,3 +1,4 @@
 .tribunal-profile/
 tribunal-session.env
 *.local.env
+automation-report/

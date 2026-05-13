@@ -212,9 +212,14 @@ $environment = [pscustomobject]@{
     tribunalChromeProfileDirectory = $env:TRIBUNAL_CHROME_PROFILE_DIRECTORY
     tribunalProfileDirExists = -not [string]::IsNullOrWhiteSpace($env:TRIBUNAL_PROFILE_DIR) -and (Test-Path -LiteralPath $env:TRIBUNAL_PROFILE_DIR -PathType Container)
     tribunalSessionConfirmed = $env:TRIBUNAL_SESSION_CONFIRMED -eq "1"
+    isGithubActions = $env:GITHUB_ACTIONS -eq "true"
+    hasGovbrCpf = -not [string]::IsNullOrWhiteSpace($env:GOVBR_CPF)
+    hasGovbrPassword = -not [string]::IsNullOrWhiteSpace($env:GOVBR_PASSWORD)
+    hasFirebaseWriteSecret = (-not [string]::IsNullOrWhiteSpace($env:FIREBASE_DATABASE_AUTH_TOKEN)) -or (-not [string]::IsNullOrWhiteSpace($env:FIREBASE_SERVICE_ACCOUNT_JSON))
     hasGmailConnectorHint = -not [string]::IsNullOrWhiteSpace($env:GMAIL_CONNECTOR_AVAILABLE)
 }
-$hasTribunalSession = $environment.hasTribunalBrowserWs -or ($environment.tribunalProfileDirExists -and $environment.tribunalSessionConfirmed)
+$hasGithubCredentialMode = $environment.isGithubActions -and $environment.hasGovbrCpf -and $environment.hasGovbrPassword
+$hasTribunalSession = $environment.hasTribunalBrowserWs -or ($environment.tribunalProfileDirExists -and $environment.tribunalSessionConfirmed) -or $hasGithubCredentialMode
 
 try {
     $firebaseRead = Invoke-FirebaseRead -Url $processesUrl
@@ -232,7 +237,7 @@ try {
         blockers = @(
             "Nao foi possivel ler o dashboard/Firebase no endpoint publicado; sem isso nao ha periodo confiavel para a atualizacao."
             if (-not $hasTribunalSession) {
-                "Ambiente automatico sem TRIBUNAL_BROWSER_WS ou TRIBUNAL_PROFILE_DIR; nao ha sessao autenticada de tribunal para leitura de teor."
+                "Ambiente automatico sem sessao remota/perfil persistente ou Secrets GOVBR_CPF/GOVBR_PASSWORD; nao ha acesso autenticado de tribunal para leitura de teor."
             }
             if ($environment.hasTribunalProfileDir -and -not $environment.tribunalProfileDirExists) {
                 "TRIBUNAL_PROFILE_DIR foi informado, mas o diretorio nao existe no ambiente automatico."
@@ -242,6 +247,9 @@ try {
             }
             if (-not $environment.hasGmailConnectorHint) {
                 "Ambiente automatico sem indicio de conector Gmail disponivel; pushes podem ficar indisponiveis."
+            }
+            if ($environment.isGithubActions -and -not $environment.hasFirebaseWriteSecret) {
+                "GitHub Actions sem FIREBASE_DATABASE_AUTH_TOKEN ou FIREBASE_SERVICE_ACCOUNT_JSON; leitura pode funcionar, mas gravacao no Firebase ficara bloqueada."
             }
         )
         error = $_.Exception.Message
@@ -291,7 +299,7 @@ $result = [pscustomobject]@{
     environment = $environment
     blockers = @(
         if (-not $hasTribunalSession) {
-            "Ambiente automatico sem TRIBUNAL_BROWSER_WS ou TRIBUNAL_PROFILE_DIR; nao ha sessao autenticada de tribunal para leitura de teor."
+            "Ambiente automatico sem sessao remota/perfil persistente ou Secrets GOVBR_CPF/GOVBR_PASSWORD; nao ha acesso autenticado de tribunal para leitura de teor."
         }
         if ($environment.hasTribunalProfileDir -and -not $environment.tribunalProfileDirExists) {
             "TRIBUNAL_PROFILE_DIR foi informado, mas o diretorio nao existe no ambiente automatico."
@@ -301,6 +309,9 @@ $result = [pscustomobject]@{
         }
         if (-not $environment.hasGmailConnectorHint) {
             "Ambiente automatico sem indicio de conector Gmail disponivel; pushes podem ficar indisponiveis."
+        }
+        if ($environment.isGithubActions -and -not $environment.hasFirebaseWriteSecret) {
+            "GitHub Actions sem FIREBASE_DATABASE_AUTH_TOKEN ou FIREBASE_SERVICE_ACCOUNT_JSON; leitura pode funcionar, mas gravacao no Firebase ficara bloqueada."
         }
     )
     sample = @($eligible | Select-Object -First 10)

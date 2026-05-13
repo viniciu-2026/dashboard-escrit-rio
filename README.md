@@ -86,3 +86,16 @@ Depois da importacao, os dados ficam no Firebase e sincronizam em tempo real par
 - Use `Editar` para atualizar campos e status.
 - Use `Historico` para ver os eventos recentes.
 - Use `CSV` para exportar a visao filtrada.
+
+## Automacao pelo GitHub Actions
+
+A rotina diaria fica em `.github/workflows/atualizacao-processual.yml` e roda todos os dias as 02:00 no horario de Brasilia, alem de permitir execucao manual pelo botao `Run workflow` no GitHub.
+
+Cadastre os Secrets abaixo em `Settings > Secrets and variables > Actions` antes de executar:
+
+- `GOVBR_CPF`
+- `GOVBR_PASSWORD`
+- `FIREBASE_DATABASE_AUTH_TOKEN` ou `FIREBASE_SERVICE_ACCOUNT_JSON`
+- `GMAIL_REFRESH_TOKEN`, quando a etapa de pushes por e-mail estiver habilitada no runner
+
+O workflow nao usa o Chrome local do computador. Ele cria um runner novo no GitHub, abre Chromium via Playwright e usa somente Secrets criptografados do GitHub. Senhas, cookies e tokens nao devem ser gravados no repositorio, na skill ou em logs.

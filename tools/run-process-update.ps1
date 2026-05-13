@@ -14,8 +14,17 @@ function Test-JsonProperty {
     return ($null -ne $Object -and $Object.PSObject.Properties.Name -contains $Name)
 }
 
+function Get-PowerShellExecutable {
+    foreach ($candidate in @("pwsh", "powershell")) {
+        $command = Get-Command $candidate -ErrorAction SilentlyContinue
+        if ($command) { return $command.Source }
+    }
+    throw "Nenhum executavel PowerShell encontrado no ambiente."
+}
+
 try {
-    $preflightOutput = & powershell -NoProfile -ExecutionPolicy Bypass -File $preflightPath 2>&1
+    $powershellExe = Get-PowerShellExecutable
+    $preflightOutput = & $powershellExe -NoProfile -ExecutionPolicy Bypass -File $preflightPath 2>&1
     $preflightExit = $LASTEXITCODE
 } catch {
     $preflightOutput = @($_.Exception.Message)
