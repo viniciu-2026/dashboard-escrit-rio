@@ -35,8 +35,20 @@ jobs:
 
       - name: Instalar Playwright
         run: |
-          npm install --no-save playwright
-          npx playwright install --with-deps chromium
+          npm config set fetch-retries 5
+          npm config set fetch-retry-factor 2
+          npm config set fetch-retry-mintimeout 20000
+          npm config set fetch-retry-maxtimeout 120000
+          for attempt in 1 2 3; do
+            npm install --no-save playwright && break
+            if [ "$attempt" = "3" ]; then exit 1; fi
+            sleep 20
+          done
+          for attempt in 1 2 3; do
+            npx playwright install --with-deps chromium && break
+            if [ "$attempt" = "3" ]; then exit 1; fi
+            sleep 20
+          done
 
       - name: Rodar atualizacao processual
         shell: pwsh
