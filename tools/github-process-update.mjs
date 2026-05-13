@@ -254,6 +254,156 @@ async function runBrowserSmoke(report) {
   }
 }
 
+async function clickFirstVisible(page, candidates, timeout = 5000) {
+  for (const candidate of candidates) {
+    const locator = typeof candidate === 'string' ? page.locator(candidate) : candidate;
+    try {
+      const first = locator.first();
+      await first.waitFor({ state: 'visible', timeout });
+      await first.click();
+      return true;
+    } catch {
+      // Try the next selector/text candidate.
+    }
+  }
+  return false;
+}
+
+async function fillFirstVisible(page, candidates, value, timeout = 5000) {
+  for (const selector of candidates) {
+    try {
+      const locator = page.locator(selector).first();
+      await locator.waitFor({ state: 'visible', timeout });
+      await locator.fill(value);
+      return true;
+    } catch {
+      // Try the next selector.
+    }
+  }
+  return false;
+}
+
+async function getVisibleTextSample(page) {
+  try {
+    const text = await page.locator('body').innerText({ timeout: 5000 });
+    return text.replace(/\s+/g, ' ').trim().slice(0, 700);
+  } catch {
+    return '';
+  }
+}
+
+async function runJusbrGovLogin(report) {
+  let chromium;
+  try {
+    ({ chromium } = await import('playwright'));
+  } catch (error) {
+    return {
+      ok: false,
+      status: 'blocked',
+      reason: 'Playwright nao esta instalado no runner.',
+      error: String(error.message || error)
+    };
+  }
+
+  const browser = await chromium.launch({ headless: true });
+  const page = await browser.newPage({ locale: 'pt-BR', timezoneId: 'America/Sao_Paulo' });
+  try {
+    await page.goto(process.env.JUSBR_URL || 'https://www.jus.br/servicos/', { waitUntil: 'domcontentloaded', timeout: 60000 });
+
+    const govClicked = await clickFirstVisible(page, [
+      page.getByRole('button', { name: /gov\.br|entrar/i }),
+      page.getByRole('link', { name: /gov\.br|entrar/i }),
+      'button:has-text("gov.br")',
+      'a:has-text("gov.br")',
+      'button:has-text("Entrar")',
+      'a:has-text("Entrar")'
+    ], 8000);
+
+    if (govClicked) {
+      await page.waitForLoadState('domcontentloaded', { timeout: 30000 }).catch(() => {});
+    }
+
+    const cpfFilled = await fillFirstVisible(page, [
+      '#accountId',
+      'input[name="accountId"]',
+      'input[name="login"]',
+      'input[name="username"]',
+      'input[type="tel"]',
+      'input[type="text"]'
+    ], process.env.GOVBR_CPF, 15000);
+
+    if (!cpfFilled) {
+      return {
+        ok: false,
+        status: 'blocked',
+        stage: 'govbr-cpf',
+        reason: 'Nao encontrei o campo de CPF/login do GOV.BR.',
+        url: page.url(),
+        title: await page.title(),
+        textSample: await getVisibleTextSample(page)
+      };
+    }
+
+    await clickFirstVisible(page, [
+      '#enter-account-id',
+      'button[name="operation"]',
+      'button[type="submit"]',
+      page.getByRole('button', { name: /continuar|entrar|avançar|avancar/i })
+    ], 8000);
+    await page.waitForLoadState('domcontentloaded', { timeout: 30000 }).catch(() => {});
+
+    const passwordFilled = await fillFirstVisible(page, [
+      '#password',
+      'input[name="password"]',
+      'input[type="password"]'
+    ], process.env.GOVBR_PASSWORD, 20000);
+
+    if (!passwordFilled) {
+      return {
+        ok: false,
+        status: 'blocked',
+        stage: 'govbr-password',
+        reason: 'Nao encontrei o campo de senha apos informar CPF. Pode haver captcha, 2FA, conta bloqueada ou mudanca de fluxo.',
+        url: page.url(),
+        title: await page.title(),
+        textSample: await getVisibleTextSample(page)
+      };
+    }
+
+    await clickFirstVisible(page, [
+      '#submit-button',
+      'button[type="submit"]',
+      page.getByRole('button', { name: /entrar|continuar|autorizar|permitir/i })
+    ], 8000);
+    await page.waitForLoadState('domcontentloaded', { timeout: 30000 }).catch(() => {});
+    await page.waitForTimeout(3000);
+
+    const textSample = await getVisibleTextSample(page);
+    const lower = textSample.toLowerCase();
+    if (/captcha|verifica|código|codigo|duas etapas|validação|validacao|autenticador/.test(lower)) {
+      return {
+        ok: false,
+        status: 'blocked',
+        stage: 'post-password',
+        reason: 'GOV.BR solicitou validacao adicional/captcha/2FA no runner.',
+        url: page.url(),
+        title: await page.title(),
+        textSample
+      };
+    }
+
+    return {
+      ok: /jus\.br|pje\.jus\.br|sso\.cloud\.pje\.jus\.br/.test(page.url()),
+      status: 'login-attempt-complete',
+      url: page.url(),
+      title: await page.title(),
+      textSample
+    };
+  } finally {
+    await browser.close();
+  }
+}
+
 async function main() {
   await mkdir(reportDir, { recursive: true });
 
@@ -359,6 +509,13 @@ async function main() {
     await runBrowserSmoke(report);
   }
 
+  if (report.blockers.length === 0) {
+    report.jusbrLogin = await runJusbrGovLogin(report);
+    if (!report.jusbrLogin.ok) {
+      report.blockers.push(`Login Jus.br/GOV bloqueado: ${report.jusbrLogin.reason || report.jusbrLogin.status}`);
+    }
+  }
+
   report.finishedAt = new Date().toISOString();
   report.ok = report.blockers.length === 0 && report.browser?.ok === true && report.gmail?.ok === true;
   report.status = report.ok ? 'discovery-complete-teor-pendente' : 'blocked';
@@ -381,6 +538,14 @@ async function main() {
       totalToVerifyInTribunals: report.consolidated.totalToVerifyInTribunals
     } : null,
     browser: report.browser,
+    jusbrLogin: report.jusbrLogin ? {
+      ok: report.jusbrLogin.ok,
+      status: report.jusbrLogin.status,
+      stage: report.jusbrLogin.stage,
+      reason: report.jusbrLogin.reason,
+      title: report.jusbrLogin.title,
+      url: report.jusbrLogin.url
+    } : null,
     blockers: report.blockers
   };
 
