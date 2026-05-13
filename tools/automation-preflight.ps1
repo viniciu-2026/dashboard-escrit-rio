@@ -5,6 +5,33 @@ $ErrorActionPreference = "Stop"
 
 $processesUrl = "https://dashboard-vg-default-rtdb.firebaseio.com/dashboard/processes.json"
 $cnjPattern = "\b\d{7}-\d{2}\.\d{4}\.\d\.\d{2}\.\d{4}\b"
+$sessionConfigPath = Join-Path $env:USERPROFILE ".codex\process-automation\tribunal-session.env"
+
+function Import-SessionConfig {
+    param([string]$Path)
+    if (-not (Test-Path -LiteralPath $Path)) { return $false }
+
+    foreach ($line in Get-Content -LiteralPath $Path) {
+        $trimmed = $line.Trim()
+        if ([string]::IsNullOrWhiteSpace($trimmed) -or $trimmed.StartsWith("#")) { continue }
+        $separator = $trimmed.IndexOf("=")
+        if ($separator -le 0) { continue }
+
+        $name = $trimmed.Substring(0, $separator).Trim()
+        $value = $trimmed.Substring($separator + 1).Trim()
+        if (($value.StartsWith('"') -and $value.EndsWith('"')) -or ($value.StartsWith("'") -and $value.EndsWith("'"))) {
+            $value = $value.Substring(1, $value.Length - 2)
+        }
+
+        if ($name -match "^[A-Z_][A-Z0-9_]*$") {
+            [Environment]::SetEnvironmentVariable($name, $value, "Process")
+        }
+    }
+
+    return $true
+}
+
+$loadedSessionConfig = Import-SessionConfig -Path $sessionConfigPath
 
 function ConvertFrom-JsonStrict {
     param([string]$Text, [string]$Method)
@@ -179,12 +206,14 @@ function Get-TextProperty {
 }
 
 $environment = [pscustomobject]@{
+    loadedSessionConfig = $loadedSessionConfig
     hasTribunalBrowserWs = -not [string]::IsNullOrWhiteSpace($env:TRIBUNAL_BROWSER_WS)
     hasTribunalProfileDir = -not [string]::IsNullOrWhiteSpace($env:TRIBUNAL_PROFILE_DIR)
     tribunalProfileDirExists = -not [string]::IsNullOrWhiteSpace($env:TRIBUNAL_PROFILE_DIR) -and (Test-Path -LiteralPath $env:TRIBUNAL_PROFILE_DIR -PathType Container)
+    tribunalSessionConfirmed = $env:TRIBUNAL_SESSION_CONFIRMED -eq "1"
     hasGmailConnectorHint = -not [string]::IsNullOrWhiteSpace($env:GMAIL_CONNECTOR_AVAILABLE)
 }
-$hasTribunalSession = $environment.hasTribunalBrowserWs -or $environment.tribunalProfileDirExists
+$hasTribunalSession = $environment.hasTribunalBrowserWs -or ($environment.tribunalProfileDirExists -and $environment.tribunalSessionConfirmed)
 
 try {
     $firebaseRead = Invoke-FirebaseRead -Url $processesUrl
@@ -206,6 +235,9 @@ try {
             }
             if ($environment.hasTribunalProfileDir -and -not $environment.tribunalProfileDirExists) {
                 "TRIBUNAL_PROFILE_DIR foi informado, mas o diretorio nao existe no ambiente automatico."
+            }
+            if ($environment.tribunalProfileDirExists -and -not $environment.tribunalSessionConfirmed -and -not $environment.hasTribunalBrowserWs) {
+                "TRIBUNAL_PROFILE_DIR existe, mas TRIBUNAL_SESSION_CONFIRMED=1 nao foi configurado apos login/autenticacao dos tribunais."
             }
             if (-not $environment.hasGmailConnectorHint) {
                 "Ambiente automatico sem indicio de conector Gmail disponivel; pushes podem ficar indisponiveis."
@@ -262,6 +294,9 @@ $result = [pscustomobject]@{
         }
         if ($environment.hasTribunalProfileDir -and -not $environment.tribunalProfileDirExists) {
             "TRIBUNAL_PROFILE_DIR foi informado, mas o diretorio nao existe no ambiente automatico."
+        }
+        if ($environment.tribunalProfileDirExists -and -not $environment.tribunalSessionConfirmed -and -not $environment.hasTribunalBrowserWs) {
+            "TRIBUNAL_PROFILE_DIR existe, mas TRIBUNAL_SESSION_CONFIRMED=1 nao foi configurado apos login/autenticacao dos tribunais."
         }
         if (-not $environment.hasGmailConnectorHint) {
             "Ambiente automatico sem indicio de conector Gmail disponivel; pushes podem ficar indisponiveis."
