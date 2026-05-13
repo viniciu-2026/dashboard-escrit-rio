@@ -78,7 +78,7 @@ if (-not (Test-JsonProperty -Object $preflight -Name "maxVerificationPtBr") -or 
 
 $hardBlockers = @()
 foreach ($blocker in @($preflight.blockers)) {
-    if ($blocker -match "TRIBUNAL_BROWSER_WS|TRIBUNAL_PROFILE_DIR|sessao autenticada") {
+    if ($blocker -match "TRIBUNAL_BROWSER_WS|TRIBUNAL_PROFILE_DIR|sessao|GOVBR_CPF|GOVBR_PASSWORD") {
         $hardBlockers += $blocker
     }
 }

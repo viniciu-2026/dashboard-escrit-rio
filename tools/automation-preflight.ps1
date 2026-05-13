@@ -5,10 +5,16 @@ $ErrorActionPreference = "Stop"
 
 $processesUrl = "https://dashboard-vg-default-rtdb.firebaseio.com/dashboard/processes.json"
 $cnjPattern = "\b\d{7}-\d{2}\.\d{4}\.\d\.\d{2}\.\d{4}\b"
-$sessionConfigPath = Join-Path $env:USERPROFILE ".codex\process-automation\tribunal-session.env"
+$userHome = if (-not [string]::IsNullOrWhiteSpace($env:USERPROFILE)) { $env:USERPROFILE } else { $env:HOME }
+$sessionConfigPath = if (-not [string]::IsNullOrWhiteSpace($userHome)) {
+    Join-Path (Join-Path (Join-Path $userHome ".codex") "process-automation") "tribunal-session.env"
+} else {
+    $null
+}
 
 function Import-SessionConfig {
     param([string]$Path)
+    if ([string]::IsNullOrWhiteSpace($Path)) { return $false }
     if (-not (Test-Path -LiteralPath $Path)) { return $false }
 
     foreach ($line in Get-Content -LiteralPath $Path) {
