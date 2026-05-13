@@ -96,7 +96,8 @@ if ($hardBlockers.Count -gt 0) {
         message = "Rotina interrompida antes de consultar tribunais: ambiente automatico sem navegador/perfil persistente autenticado."
         nextRequiredConfig = @(
             "TRIBUNAL_BROWSER_WS apontando para navegador remoto persistente autenticado",
-            "ou TRIBUNAL_PROFILE_DIR apontando para perfil persistente preparado no servidor"
+            "ou TRIBUNAL_PROFILE_DIR apontando para perfil persistente preparado no servidor",
+            "ou, no GitHub Actions, Secrets GOVBR_CPF/GOVBR_PASSWORD configurados"
         )
         preflight = $preflight
     }

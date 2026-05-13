@@ -122,7 +122,6 @@ async function main() {
     report.totalProcesses = processes.length;
     report.eligibleCnjs = eligible.length;
     report.maxVerificationPtBr = maxVerification || null;
-    report.sample = eligible.slice(0, 10);
   } catch (error) {
     report.blockers.push('Nao foi possivel ler o Firebase publicado; sem isso nao ha periodo confiavel.');
     report.error = String(error.message || error);

@@ -13,6 +13,38 @@ function Write-JsonFile {
     $Object | ConvertTo-Json -Depth $Depth | Set-Content -LiteralPath $Path -Encoding UTF8
 }
 
+function Remove-SensitiveSamples {
+    param($Object)
+    if ($null -eq $Object) { return $Object }
+
+    $copy = $Object | ConvertTo-Json -Depth 20 | ConvertFrom-Json
+    $stack = New-Object System.Collections.Stack
+    $stack.Push($copy)
+
+    while ($stack.Count -gt 0) {
+        $current = $stack.Pop()
+        if ($null -eq $current) { continue }
+
+        if ($current -is [System.Array]) {
+            foreach ($item in $current) { $stack.Push($item) }
+            continue
+        }
+
+        foreach ($property in @($current.PSObject.Properties)) {
+            if ($property.Name -eq "sample") {
+                $current.PSObject.Properties.Remove($property.Name)
+            } elseif ($null -ne $property.Value) {
+                $value = $property.Value
+                if ($value -is [System.Array] -or ($value -isnot [string] -and $value.GetType().IsPrimitive -eq $false)) {
+                    $stack.Push($value)
+                }
+            }
+        }
+    }
+
+    return $copy
+}
+
 function Get-PowerShellExecutable {
     foreach ($candidate in @("pwsh", "powershell")) {
         $command = Get-Command $candidate -ErrorAction SilentlyContinue
@@ -49,7 +81,7 @@ try {
         preflightOutput = $preflightJoined
     }
     Write-JsonFile -Object $result -Path (Join-Path $reportDir "github-run.json")
-    $result | ConvertTo-Json -Depth 12
+    Remove-SensitiveSamples -Object $result | ConvertTo-Json -Depth 12
     exit 2
 }
 
@@ -63,7 +95,7 @@ if (-not $preflight.ok) {
         preflight = $preflight
     }
     Write-JsonFile -Object $result -Path (Join-Path $reportDir "github-run.json")
-    $result | ConvertTo-Json -Depth 12
+    Remove-SensitiveSamples -Object $result | ConvertTo-Json -Depth 12
     exit 2
 }
 
@@ -93,7 +125,7 @@ $result = [pscustomobject]@{
 }
 
 Write-JsonFile -Object $result -Path (Join-Path $reportDir "github-run.json")
-$result | ConvertTo-Json -Depth 12
+Remove-SensitiveSamples -Object $result | ConvertTo-Json -Depth 12
 
 if (-not $result.ok) {
     exit 2
