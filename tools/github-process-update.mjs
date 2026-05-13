@@ -85,7 +85,7 @@ async function main() {
       hasGovbrPassword: has('GOVBR_PASSWORD'),
       hasFirebaseDatabaseAuthToken: has('FIREBASE_DATABASE_AUTH_TOKEN'),
       hasFirebaseServiceAccountJson: has('FIREBASE_SERVICE_ACCOUNT_JSON'),
-      hasGmailCredentialHint: has('GMAIL_REFRESH_TOKEN') || has('GMAIL_CONNECTOR_AVAILABLE')
+      hasGmailCredentialHint: has('GMAIL_OAUTH_JSON') || (has('GMAIL_REFRESH_TOKEN') && has('GMAIL_CLIENT_ID') && has('GMAIL_CLIENT_SECRET')) || has('GMAIL_CONNECTOR_AVAILABLE')
     },
     blockers: []
   };

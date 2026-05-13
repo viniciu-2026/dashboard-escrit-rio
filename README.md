@@ -96,6 +96,6 @@ Cadastre os Secrets abaixo em `Settings > Secrets and variables > Actions` antes
 - `GOVBR_CPF`
 - `GOVBR_PASSWORD`
 - `FIREBASE_DATABASE_AUTH_TOKEN` ou `FIREBASE_SERVICE_ACCOUNT_JSON`
-- `GMAIL_REFRESH_TOKEN`, quando a etapa de pushes por e-mail estiver habilitada no runner
+- `GMAIL_OAUTH_JSON`, ou o trio `GMAIL_REFRESH_TOKEN`, `GMAIL_CLIENT_ID` e `GMAIL_CLIENT_SECRET`, para a etapa obrigatoria de pushes por e-mail
 
 O workflow nao usa o Chrome local do computador. Ele cria um runner novo no GitHub, abre Chromium via Playwright e usa somente Secrets criptografados do GitHub. Senhas, cookies e tokens nao devem ser gravados no repositorio, na skill ou em logs.

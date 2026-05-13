@@ -22,6 +22,9 @@ jobs:
       FIREBASE_DATABASE_AUTH_TOKEN: ${{ secrets.FIREBASE_DATABASE_AUTH_TOKEN }}
       FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
       GMAIL_REFRESH_TOKEN: ${{ secrets.GMAIL_REFRESH_TOKEN }}
+      GMAIL_CLIENT_ID: ${{ secrets.GMAIL_CLIENT_ID }}
+      GMAIL_CLIENT_SECRET: ${{ secrets.GMAIL_CLIENT_SECRET }}
+      GMAIL_OAUTH_JSON: ${{ secrets.GMAIL_OAUTH_JSON }}
       JUSBR_URL: https://jus.br
 
     steps:
@@ -37,10 +40,13 @@ jobs:
         shell: pwsh
         run: |
           $missing = @()
-          foreach ($name in @("GOVBR_CPF", "GOVBR_PASSWORD", "GMAIL_REFRESH_TOKEN")) {
+          foreach ($name in @("GOVBR_CPF", "GOVBR_PASSWORD")) {
             if ([string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable($name))) {
               $missing += $name
             }
+          }
+          if ([string]::IsNullOrWhiteSpace($env:GMAIL_OAUTH_JSON) -and ([string]::IsNullOrWhiteSpace($env:GMAIL_REFRESH_TOKEN) -or [string]::IsNullOrWhiteSpace($env:GMAIL_CLIENT_ID) -or [string]::IsNullOrWhiteSpace($env:GMAIL_CLIENT_SECRET))) {
+            $missing += "GMAIL_OAUTH_JSON ou GMAIL_REFRESH_TOKEN/GMAIL_CLIENT_ID/GMAIL_CLIENT_SECRET"
           }
           if ([string]::IsNullOrWhiteSpace($env:FIREBASE_DATABASE_AUTH_TOKEN) -and [string]::IsNullOrWhiteSpace($env:FIREBASE_SERVICE_ACCOUNT_JSON)) {
             $missing += "FIREBASE_DATABASE_AUTH_TOKEN ou FIREBASE_SERVICE_ACCOUNT_JSON"

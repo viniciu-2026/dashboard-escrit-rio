@@ -222,7 +222,7 @@ $environment = [pscustomobject]@{
     hasGovbrCpf = -not [string]::IsNullOrWhiteSpace($env:GOVBR_CPF)
     hasGovbrPassword = -not [string]::IsNullOrWhiteSpace($env:GOVBR_PASSWORD)
     hasFirebaseWriteSecret = (-not [string]::IsNullOrWhiteSpace($env:FIREBASE_DATABASE_AUTH_TOKEN)) -or (-not [string]::IsNullOrWhiteSpace($env:FIREBASE_SERVICE_ACCOUNT_JSON))
-    hasGmailConnectorHint = -not [string]::IsNullOrWhiteSpace($env:GMAIL_CONNECTOR_AVAILABLE)
+    hasGmailConnectorHint = (-not [string]::IsNullOrWhiteSpace($env:GMAIL_CONNECTOR_AVAILABLE)) -or (-not [string]::IsNullOrWhiteSpace($env:GMAIL_OAUTH_JSON)) -or ((-not [string]::IsNullOrWhiteSpace($env:GMAIL_REFRESH_TOKEN)) -and (-not [string]::IsNullOrWhiteSpace($env:GMAIL_CLIENT_ID)) -and (-not [string]::IsNullOrWhiteSpace($env:GMAIL_CLIENT_SECRET)))
 }
 $hasGithubCredentialMode = $environment.isGithubActions -and $environment.hasGovbrCpf -and $environment.hasGovbrPassword
 $hasTribunalSession = $environment.hasTribunalBrowserWs -or ($environment.tribunalProfileDirExists -and $environment.tribunalSessionConfirmed) -or $hasGithubCredentialMode
