@@ -44,7 +44,39 @@ function Get-TextProperty {
     return ""
 }
 
-$raw = Invoke-RestMethod -Uri $processesUrl -Method Get -TimeoutSec 45
+$environment = [pscustomobject]@{
+    hasTribunalBrowserWs = -not [string]::IsNullOrWhiteSpace($env:TRIBUNAL_BROWSER_WS)
+    hasTribunalProfileDir = -not [string]::IsNullOrWhiteSpace($env:TRIBUNAL_PROFILE_DIR)
+    hasGmailConnectorHint = -not [string]::IsNullOrWhiteSpace($env:GMAIL_CONNECTOR_AVAILABLE)
+}
+
+try {
+    $raw = Invoke-RestMethod -Uri $processesUrl -Method Get -TimeoutSec 45
+} catch {
+    $result = [pscustomobject]@{
+        ok = $false
+        source = $processesUrl
+        totalProcesses = 0
+        eligibleCnjs = 0
+        maxVerificationPtBr = $null
+        maxVerificationIso = $null
+        todayPtBr = (Get-Date).ToString("dd/MM/yyyy")
+        environment = $environment
+        blockers = @(
+            "Nao foi possivel ler o dashboard/Firebase no endpoint publicado; sem isso nao ha periodo confiavel para a atualizacao."
+            if (-not $environment.hasTribunalBrowserWs -and -not $environment.hasTribunalProfileDir) {
+                "Ambiente automatico sem TRIBUNAL_BROWSER_WS ou TRIBUNAL_PROFILE_DIR; nao ha sessao autenticada de tribunal para leitura de teor."
+            }
+            if (-not $environment.hasGmailConnectorHint) {
+                "Ambiente automatico sem indicio de conector Gmail disponivel; pushes podem ficar indisponiveis."
+            }
+        )
+        error = $_.Exception.Message
+    }
+    $result | ConvertTo-Json -Depth 6
+    exit 0
+}
+
 $processes = ConvertTo-ProcessList -Raw $raw
 
 $maxVerification = $null
@@ -71,12 +103,6 @@ foreach ($process in $processes) {
             }
         }
     }
-}
-
-$environment = [pscustomobject]@{
-    hasTribunalBrowserWs = -not [string]::IsNullOrWhiteSpace($env:TRIBUNAL_BROWSER_WS)
-    hasTribunalProfileDir = -not [string]::IsNullOrWhiteSpace($env:TRIBUNAL_PROFILE_DIR)
-    hasGmailConnectorHint = -not [string]::IsNullOrWhiteSpace($env:GMAIL_CONNECTOR_AVAILABLE)
 }
 
 $result = [pscustomobject]@{

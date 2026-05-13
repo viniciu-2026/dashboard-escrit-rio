@@ -9,10 +9,52 @@ if (-not (Test-Path -LiteralPath $preflightPath)) {
     throw "Preflight nao encontrado em $preflightPath"
 }
 
-$preflightJson = & powershell -NoProfile -ExecutionPolicy Bypass -File $preflightPath
-$preflight = $preflightJson | ConvertFrom-Json
+function Test-JsonProperty {
+    param($Object, [string]$Name)
+    return ($null -ne $Object -and $Object.PSObject.Properties.Name -contains $Name)
+}
 
-if (-not $preflight.maxVerificationPtBr) {
+try {
+    $preflightOutput = & powershell -NoProfile -ExecutionPolicy Bypass -File $preflightPath 2>&1
+    $preflightExit = $LASTEXITCODE
+} catch {
+    $preflightOutput = @($_.Exception.Message)
+    $preflightExit = 1
+}
+
+$preflightText = ($preflightOutput | ForEach-Object { [string]$_ }) -join [Environment]::NewLine
+
+try {
+    $preflight = $preflightText | ConvertFrom-Json
+} catch {
+    $result = [pscustomobject]@{
+        ok = $false
+        status = "blocked"
+        startedAt = $runStartedAt
+        finishedAt = (Get-Date).ToString("s")
+        reason = "Preflight nao retornou JSON valido."
+        preflightExitCode = $preflightExit
+        preflightOutput = $preflightText
+    }
+    $result | ConvertTo-Json -Depth 8
+    exit 2
+}
+
+if ((Test-JsonProperty -Object $preflight -Name "ok") -and -not $preflight.ok) {
+    $result = [pscustomobject]@{
+        ok = $false
+        status = "blocked"
+        startedAt = $runStartedAt
+        finishedAt = (Get-Date).ToString("s")
+        reason = "Preflight bloqueado antes da consulta processual."
+        preflightExitCode = $preflightExit
+        preflight = $preflight
+    }
+    $result | ConvertTo-Json -Depth 8
+    exit 2
+}
+
+if (-not (Test-JsonProperty -Object $preflight -Name "maxVerificationPtBr") -or -not $preflight.maxVerificationPtBr) {
     $result = [pscustomobject]@{
         ok = $false
         status = "blocked"
