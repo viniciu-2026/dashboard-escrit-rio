@@ -320,7 +320,7 @@ $result = [pscustomobject]@{
             "GitHub Actions sem FIREBASE_DATABASE_AUTH_TOKEN ou FIREBASE_SERVICE_ACCOUNT_JSON; leitura pode funcionar, mas gravacao no Firebase ficara bloqueada."
         }
     )
-    sample = @($eligible | Select-Object -First 10)
+    sample = if ($environment.isGithubActions) { @() } else { @($eligible | Select-Object -First 10) }
 }
 
 $result | ConvertTo-Json -Depth 6

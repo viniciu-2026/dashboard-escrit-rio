@@ -25,7 +25,7 @@ jobs:
       GMAIL_CLIENT_ID: ${{ secrets.GMAIL_CLIENT_ID }}
       GMAIL_CLIENT_SECRET: ${{ secrets.GMAIL_CLIENT_SECRET }}
       GMAIL_OAUTH_JSON: ${{ secrets.GMAIL_OAUTH_JSON }}
-      JUSBR_URL: https://jus.br
+      JUSBR_URL: https://www.jus.br/servicos/
 
     steps:
       - name: Baixar repositorio
