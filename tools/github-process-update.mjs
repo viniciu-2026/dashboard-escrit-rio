@@ -1436,7 +1436,20 @@ async function runTribunalProbes(report) {
 
       if (loggedIn) {
         let eprocBlocked = false;
-        for (const target of targets) {
+        for (let index = 0; index < targets.length; index += 1) {
+          const target = targets[index];
+          if (eprocBlocked) {
+            probes.push({
+              ok: false,
+              status: 'tribunal-check-skipped-after-eproc-blocker',
+              reason: 'O eproc ja bloqueou o acesso automatico ao teor nesta execucao; os demais processos ficam pendentes pelo mesmo bloqueio de ambiente.',
+              cnj: target.process.cnj,
+              cliente: target.process.cliente,
+              tribunal: target.tribunal.eproc?.name || target.tribunal.name
+            });
+            continue;
+          }
+
           const pjeResult = await searchPjeProcess(page, target.process);
           probes.push(pjeResult);
           if (!pjeResult.ok && target.tribunal.eproc && !eprocBlocked) {
@@ -1449,15 +1462,6 @@ async function runTribunalProbes(report) {
             } finally {
               await eprocPage.close().catch(() => {});
             }
-          } else if (!pjeResult.ok && target.tribunal.eproc && eprocBlocked) {
-            probes.push({
-              ok: false,
-              status: 'eproc-skipped-after-login-blocker',
-              reason: 'eproc ja bloqueou login automatico nesta execucao; evitando repetir tentativas identicas para os demais processos.',
-              cnj: target.process.cnj,
-              cliente: target.process.cliente,
-              tribunal: target.tribunal.eproc.name
-            });
           }
         }
       }
