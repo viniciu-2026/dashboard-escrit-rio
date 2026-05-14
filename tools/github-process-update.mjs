@@ -810,6 +810,10 @@ async function searchPjeProcess(page, process) {
       'input[id*="tribunal"]'
     ], parts.tribunal),
     origem: await fillPjeSegment(page, [
+      'input[id*="NumeroOrgaoJustica"]',
+      'input[id*="numeroOrgaoJustica"]',
+      'input[name*="NumeroOrgaoJustica"]',
+      'input[name*="numeroOrgaoJustica"]',
       'input[id*="NumeroOrigem"]',
       'input[id*="numeroOrigem"]',
       'input[name*="NumeroOrigem"]',
