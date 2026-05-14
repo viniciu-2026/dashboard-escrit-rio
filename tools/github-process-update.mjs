@@ -550,8 +550,8 @@ function tribunalTargetForCnj(cnj) {
     return {
       name: 'TJRJ PJe 1g',
       url: 'https://tjrj.pje.jus.br/1g/loginOld.seam',
-      loginUser: secretValue('TRIBUNAL_CPF', 'GOVBR_CPF'),
-      loginPassword: secretValue('TRIBUNAL_PASSWORD', 'GOVBR_PASSWORD')
+      loginUser: secretValue('TRIBUNAL_CPF'),
+      loginPassword: secretValue('TRIBUNAL_PASSWORD')
     };
   }
   return null;
@@ -565,7 +565,7 @@ async function tryTribunalPasswordLogin(page, tribunal) {
       attempted: false,
       ok: false,
       status: 'tribunal-password-secrets-missing',
-      reason: 'Faltam Secrets TRIBUNAL_CPF/TRIBUNAL_PASSWORD ou fallback GOVBR_CPF/GOVBR_PASSWORD para login direto no tribunal.'
+      reason: 'Faltam Secrets TRIBUNAL_CPF/TRIBUNAL_PASSWORD para login direto no tribunal. A senha GOV.BR nao deve ser usada como senha do PJe.'
     };
   }
 
@@ -635,7 +635,7 @@ async function runTribunalProbes(report) {
   const targets = processes
     .map((process) => ({ process, tribunal: tribunalTargetForCnj(process.cnj) }))
     .filter((item) => item.tribunal)
-    .slice(0, 3);
+    .slice(0, 1);
 
   if (!targets.length) {
     return {
