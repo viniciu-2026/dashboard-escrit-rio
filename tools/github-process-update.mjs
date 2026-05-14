@@ -1167,11 +1167,17 @@ async function tryDcpLogin(page, dcp) {
 
   await page.goto(dcp.url, { waitUntil: 'domcontentloaded', timeout: 30000 });
   await page.waitForTimeout(2500);
+  await clickFirstVisible(page, [
+    page.getByRole('button', { name: /^fechar$/i }),
+    'button:has-text("Fechar")',
+    'button[aria-label="Close"]'
+  ], 3000);
+  await page.waitForTimeout(500);
 
   const userFilled = await fillFirstCandidate(page, [
+    '#usuario',
     '#username',
     '#login',
-    '#usuario',
     '#txtUsuario',
     '#mat-input-0',
     'input[name="username"]',
@@ -1189,8 +1195,8 @@ async function tryDcpLogin(page, dcp) {
   ], dcp.loginUser, 8000);
 
   const passwordFilled = await fillFirstCandidate(page, [
-    '#password',
     '#senha',
+    '#password',
     '#pwdSenha',
     '#mat-input-1',
     'input[name="password"]',
@@ -1229,9 +1235,12 @@ async function tryDcpLogin(page, dcp) {
 
   const textSample = await getVisibleText(page);
   const lower = textSample.toLowerCase();
-  const needsEmailCode = /c[oó]digo de autentica[cç][aã]o|c[oó]digo de acesso|idserverjus|enviado.*e-mail|enviado.*email/.test(lower);
+  const fieldsAfterSubmit = await collectSearchFieldDiagnostics(page);
+  const stillHasLoginFields = fieldsAfterSubmit.some((field) => /usuario|username|login/i.test(`${field.id || ''} ${field.name || ''} ${field.placeholder || ''}`))
+    && fieldsAfterSubmit.some((field) => /senha|password/i.test(`${field.id || ''} ${field.name || ''} ${field.placeholder || ''}`));
+  const needsEmailCode = /c[oó]digo de autentica[cç][aã]o|c[oó]digo de acesso|duplo fator|2fa|enviado.*e-mail|enviado.*email|confirme seu e-mail|confirme seu email/i.test(textSample);
   const rejected = /senha inv[aá]lida|usu[aá]rio inv[aá]lido|credenciais inv[aá]lidas|login inv[aá]lido|incorreto/.test(lower);
-  const stillLogin = /login|senha|entrar/.test(lower) && /portal de servi[cç]os|idserverjus|cpf|cnpj/.test(lower);
+  const stillLogin = stillHasLoginFields || /idserverjus-front\/#\/login/i.test(page.url());
 
   return {
     ok: !needsEmailCode && !rejected && !stillLogin,
