@@ -677,13 +677,31 @@ async function fillPjeSegment(page, selectors, value) {
     try {
       const locator = page.locator(selector).first();
       await locator.waitFor({ state: 'visible', timeout: 3000 });
-      await locator.fill(value);
+      await fillInputWithEvents(locator, value);
+      await page.keyboard.press('Tab').catch(() => {});
       return true;
     } catch {
       // Try next selector.
     }
   }
   return false;
+}
+
+async function clickPjeSearchButton(page) {
+  const clicked = await clickFirstVisible(page, [
+    '[id="fPP:searchProcessos"]',
+    'input[id*="searchProcessos"]',
+    'button[id*="searchProcessos"]',
+    'input[value*="Pesquisar"]',
+    'button:has-text("Pesquisar")',
+    page.getByRole('button', { name: /pesquisar|consultar/i })
+  ], 8000);
+
+  if (!clicked) return false;
+
+  await page.waitForLoadState('domcontentloaded', { timeout: 30000 }).catch(() => {});
+  await page.waitForTimeout(6000);
+  return true;
 }
 
 async function fillFirstCandidate(page, candidates, value, timeout = 3000) {
@@ -742,15 +760,7 @@ async function tryPjeFreeSearch(page, process) {
 
   if (!filled) return { ok: false, status: 'pje-free-search-field-not-found' };
 
-  await clickFirstVisible(page, [
-    'input[id*="searchProcessos"]',
-    'button[id*="searchProcessos"]',
-    'input[value*="Pesquisar"]',
-    'button:has-text("Pesquisar")',
-    page.getByRole('button', { name: /pesquisar|consultar/i })
-  ], 8000);
-  await page.waitForLoadState('domcontentloaded', { timeout: 30000 }).catch(() => {});
-  await page.waitForTimeout(3000);
+  await clickPjeSearchButton(page);
 
   const textSample = await getVisibleTextSample(page);
   const found = textSample.includes(process.cnj) || textSample.includes(process.cnj.replace(/[^\d]/g, ''));
@@ -858,15 +868,7 @@ async function searchPjeProcess(page, process) {
     };
   }
 
-  await clickFirstVisible(page, [
-    'input[id*="searchProcessos"]',
-    'button[id*="searchProcessos"]',
-    'input[value*="Pesquisar"]',
-    'button:has-text("Pesquisar")',
-    page.getByRole('button', { name: /pesquisar|consultar/i })
-  ], 8000);
-  await page.waitForLoadState('domcontentloaded', { timeout: 30000 }).catch(() => {});
-  await page.waitForTimeout(3000);
+  await clickPjeSearchButton(page);
 
   const textSample = await getVisibleTextSample(page);
   const found = textSample.includes(process.cnj) || textSample.includes(process.cnj.replace(/[^\d]/g, ''));
@@ -992,7 +994,7 @@ async function runTribunalProbes(report) {
     }
 
     return {
-      ok: probes.some((probe) => probe.status === 'tribunal-password-login-complete') && probes.some((probe) => /^pje-process-/.test(probe.status || '')),
+      ok: probes.some((probe) => /^pje-process-(opened|found)/.test(probe.status || '')),
       status: probes.some((probe) => /^pje-process-opened/.test(probe.status || '')) ? 'pje-processes-opened-teor-pending' : (probes.some((probe) => probe.status === 'tribunal-password-login-complete') ? 'pje-login-complete-search-pending' : 'tribunal-login-blocked'),
       probes
     };
