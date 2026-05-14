@@ -289,6 +289,25 @@ async function fillFirstVisible(page, candidates, value, timeout = 5000) {
   return false;
 }
 
+async function submitGovbrCpf(page) {
+  await page.waitForTimeout(500);
+  const clicked = await clickFirstVisible(page, [
+    '#enter-account-id',
+    'button:has-text("Continuar")',
+    'input[type="submit"][value*="Continuar"]',
+    'button[name="operation"]',
+    'button[type="submit"]',
+    page.getByRole('button', { name: /^continuar$/i }),
+    page.getByRole('button', { name: /continuar|entrar|avancar/i })
+  ], 8000);
+  if (!clicked) {
+    await page.keyboard.press('Enter').catch(() => {});
+  }
+  await page.waitForLoadState('domcontentloaded', { timeout: 30000 }).catch(() => {});
+  await page.waitForTimeout(2500);
+  return clicked;
+}
+
 async function getVisibleTextSample(page) {
   try {
     const text = await page.locator('body').innerText({ timeout: 5000 });
@@ -397,13 +416,7 @@ async function runJusbrGovLogin(report) {
       };
     }
 
-    await clickFirstVisible(page, [
-      '#enter-account-id',
-      'button[name="operation"]',
-      'button[type="submit"]',
-      page.getByRole('button', { name: /continuar|entrar|avançar|avancar/i })
-    ], 8000);
-    await page.waitForLoadState('domcontentloaded', { timeout: 30000 }).catch(() => {});
+    await submitGovbrCpf(page);
 
     const afterCpfBlock = await detectGovbrBlock(page, 'govbr-after-cpf');
     if (afterCpfBlock) return afterCpfBlock;
