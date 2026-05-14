@@ -586,9 +586,10 @@ async function runTribunalProbes(report) {
   try {
     const probes = [];
     for (const target of targets) {
-      const page = await browser.newPage({ locale: 'pt-BR', timezoneId: 'America/Sao_Paulo' });
+      let page;
       try {
-        await page.goto(target.tribunal.url, { waitUntil: 'domcontentloaded', timeout: 60000 });
+        page = await browser.newPage({ locale: 'pt-BR', timezoneId: 'America/Sao_Paulo' });
+        await page.goto(target.tribunal.url, { waitUntil: 'domcontentloaded', timeout: 30000 });
 
         const govClicked = await clickFirstVisible(page, [
           page.getByRole('button', { name: /gov\.br|entrar com gov/i }),
@@ -596,10 +597,10 @@ async function runTribunalProbes(report) {
           'button:has-text("gov.br")',
           'a:has-text("gov.br")',
           'input[value*="gov"]'
-        ], 10000);
+        ], 5000);
 
         if (govClicked) {
-          await page.waitForLoadState('domcontentloaded', { timeout: 30000 }).catch(() => {});
+          await page.waitForLoadState('domcontentloaded', { timeout: 15000 }).catch(() => {});
           await page.waitForTimeout(1500);
         }
 
@@ -626,7 +627,7 @@ async function runTribunalProbes(report) {
           error: String(error.message || error)
         });
       } finally {
-        await page.close().catch(() => {});
+        if (page) await page.close().catch(() => {});
       }
     }
 
