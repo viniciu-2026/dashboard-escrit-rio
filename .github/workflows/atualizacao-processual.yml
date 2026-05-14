@@ -21,6 +21,12 @@ jobs:
       GOVBR_PASSWORD: ${{ secrets.GOVBR_PASSWORD }}
       TRIBUNAL_CPF: ${{ secrets.TRIBUNAL_CPF }}
       TRIBUNAL_PASSWORD: ${{ secrets.TRIBUNAL_PASSWORD }}
+      PJE_CPF: ${{ secrets.PJE_CPF }}
+      PJE_PASSWORD: ${{ secrets.PJE_PASSWORD }}
+      EPROC_CPF: ${{ secrets.EPROC_CPF }}
+      EPROC_PASSWORD: ${{ secrets.EPROC_PASSWORD }}
+      JF_CPF: ${{ secrets.JF_CPF }}
+      JF_PASSWORD: ${{ secrets.JF_PASSWORD }}
       FIREBASE_DATABASE_AUTH_TOKEN: ${{ secrets.FIREBASE_DATABASE_AUTH_TOKEN }}
       FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
       GMAIL_REFRESH_TOKEN: ${{ secrets.GMAIL_REFRESH_TOKEN }}
