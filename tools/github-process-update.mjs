@@ -298,6 +298,32 @@ async function getVisibleTextSample(page) {
   }
 }
 
+function classifyGovbrBlock(textSample) {
+  const text = String(textSample || '');
+  if (/403\s+Forbidden|Request forbidden by administrative rules/i.test(text)) {
+    return {
+      stage: 'govbr-administrative-rules',
+      reason: 'GOV.BR bloqueou o runner por regras administrativas antes do login. Isso normalmente indica bloqueio do IP/ambiente headless do GitHub Actions.'
+    };
+  }
+  return null;
+}
+
+async function detectGovbrBlock(page, stage) {
+  const textSample = await getVisibleTextSample(page);
+  const blocked = classifyGovbrBlock(textSample);
+  if (!blocked) return null;
+  return {
+    ok: false,
+    status: 'blocked',
+    stage: blocked.stage || stage,
+    reason: blocked.reason,
+    url: page.url(),
+    title: await page.title(),
+    textSample
+  };
+}
+
 async function runJusbrGovLogin(report) {
   let chromium;
   try {
@@ -331,6 +357,9 @@ async function runJusbrGovLogin(report) {
       await page.waitForLoadState('domcontentloaded', { timeout: 30000 }).catch(() => {});
     }
 
+    const afterInitialClickBlock = await detectGovbrBlock(page, 'jusbr-initial-gov');
+    if (afterInitialClickBlock) return afterInitialClickBlock;
+
     const portalGovClicked = await clickFirstVisible(page, [
       page.getByRole('button', { name: /entrar com gov\.?br/i }),
       page.getByRole('link', { name: /entrar com gov\.?br/i }),
@@ -343,6 +372,9 @@ async function runJusbrGovLogin(report) {
       await page.waitForLoadState('domcontentloaded', { timeout: 30000 }).catch(() => {});
       await page.waitForTimeout(1500);
     }
+
+    const afterPortalGovClickBlock = await detectGovbrBlock(page, 'jusbr-portal-gov');
+    if (afterPortalGovClickBlock) return afterPortalGovClickBlock;
 
     const cpfFilled = await fillFirstVisible(page, [
       '#accountId',
@@ -373,6 +405,9 @@ async function runJusbrGovLogin(report) {
     ], 8000);
     await page.waitForLoadState('domcontentloaded', { timeout: 30000 }).catch(() => {});
 
+    const afterCpfBlock = await detectGovbrBlock(page, 'govbr-after-cpf');
+    if (afterCpfBlock) return afterCpfBlock;
+
     const passwordFilled = await fillFirstVisible(page, [
       '#password',
       'input[name="password"]',
@@ -400,6 +435,18 @@ async function runJusbrGovLogin(report) {
     await page.waitForTimeout(3000);
 
     const textSample = await getVisibleTextSample(page);
+    const postPasswordBlock = classifyGovbrBlock(textSample);
+    if (postPasswordBlock) {
+      return {
+        ok: false,
+        status: 'blocked',
+        stage: postPasswordBlock.stage,
+        reason: postPasswordBlock.reason,
+        url: page.url(),
+        title: await page.title(),
+        textSample
+      };
+    }
     const lower = textSample.toLowerCase();
     if (/usu[aá]rio ou senha inv[aá]lido|senha inv[aá]lida|credenciais inv[aá]lidas|login inv[aá]lido/.test(lower)) {
       return {
@@ -437,6 +484,101 @@ async function runJusbrGovLogin(report) {
   }
 }
 
+function tribunalTargetForCnj(cnj) {
+  if (String(cnj || '').includes('.8.19.')) {
+    return {
+      name: 'TJRJ PJe 1g',
+      url: 'https://tjrj.pje.jus.br/1g/login.seam'
+    };
+  }
+  return null;
+}
+
+async function runTribunalProbes(report) {
+  const processes = report.consolidated?.processes || [];
+  const targets = processes
+    .map((process) => ({ process, tribunal: tribunalTargetForCnj(process.cnj) }))
+    .filter((item) => item.tribunal)
+    .slice(0, 3);
+
+  if (!targets.length) {
+    return {
+      ok: true,
+      status: 'no-supported-tribunal-probe',
+      reason: 'Nenhum processo consolidado pertence aos tribunais com probe direto implementado.'
+    };
+  }
+
+  let chromium;
+  try {
+    ({ chromium } = await import('playwright'));
+  } catch (error) {
+    return {
+      ok: false,
+      status: 'blocked',
+      reason: 'Playwright nao esta instalado no runner.',
+      error: String(error.message || error)
+    };
+  }
+
+  const browser = await chromium.launch({ headless: true });
+  try {
+    const probes = [];
+    for (const target of targets) {
+      const page = await browser.newPage({ locale: 'pt-BR', timezoneId: 'America/Sao_Paulo' });
+      try {
+        await page.goto(target.tribunal.url, { waitUntil: 'domcontentloaded', timeout: 60000 });
+
+        const govClicked = await clickFirstVisible(page, [
+          page.getByRole('button', { name: /gov\.br|entrar com gov/i }),
+          page.getByRole('link', { name: /gov\.br|entrar com gov/i }),
+          'button:has-text("gov.br")',
+          'a:has-text("gov.br")',
+          'input[value*="gov"]'
+        ], 10000);
+
+        if (govClicked) {
+          await page.waitForLoadState('domcontentloaded', { timeout: 30000 }).catch(() => {});
+          await page.waitForTimeout(1500);
+        }
+
+        const govBlock = await detectGovbrBlock(page, 'tribunal-gov-login');
+        const textSample = govBlock?.textSample || await getVisibleTextSample(page);
+        probes.push({
+          ok: !govBlock && govClicked,
+          status: govBlock ? 'blocked' : (govClicked ? 'gov-login-opened' : 'gov-login-not-found'),
+          stage: govBlock?.stage,
+          reason: govBlock?.reason,
+          cnj: target.process.cnj,
+          tribunal: target.tribunal.name,
+          url: page.url(),
+          title: await page.title(),
+          textSample
+        });
+      } catch (error) {
+        probes.push({
+          ok: false,
+          status: 'blocked',
+          cnj: target.process.cnj,
+          tribunal: target.tribunal.name,
+          reason: 'Falha ao abrir o tribunal para prova de fallback.',
+          error: String(error.message || error)
+        });
+      } finally {
+        await page.close().catch(() => {});
+      }
+    }
+
+    return {
+      ok: probes.every((probe) => probe.ok),
+      status: probes.every((probe) => probe.ok) ? 'tribunal-gov-login-probed' : 'tribunal-login-blocked',
+      probes
+    };
+  } finally {
+    await browser.close();
+  }
+}
+
 async function main() {
   await mkdir(reportDir, { recursive: true });
 
@@ -454,8 +596,6 @@ async function main() {
       githubActions: process.env.GITHUB_ACTIONS === 'true',
       hasGovbrCpf: has('GOVBR_CPF'),
       hasGovbrPassword: has('GOVBR_PASSWORD'),
-      hasJusbrCpf: has('JUSBR_CPF'),
-      hasJusbrPassword: has('JUSBR_PASSWORD'),
       hasFirebaseDatabaseAuthToken: has('FIREBASE_DATABASE_AUTH_TOKEN'),
       hasFirebaseServiceAccountJson: has('FIREBASE_SERVICE_ACCOUNT_JSON'),
       hasGmailCredentialHint: has('GMAIL_OAUTH_JSON') || (has('GMAIL_REFRESH_TOKEN') && has('GMAIL_CLIENT_ID') && has('GMAIL_CLIENT_SECRET')) || has('GMAIL_CONNECTOR_AVAILABLE')
@@ -551,6 +691,13 @@ async function main() {
     }
   }
 
+  if (report.consolidated?.totalToVerifyInTribunals > 0) {
+    report.tribunalProbes = await runTribunalProbes(report);
+    if (!report.tribunalProbes.ok) {
+      report.blockers.push(`Login no tribunal bloqueado: ${report.tribunalProbes.reason || report.tribunalProbes.status}`);
+    }
+  }
+
   report.finishedAt = new Date().toISOString();
   report.ok = report.blockers.length === 0 && report.browser?.ok === true && report.gmail?.ok === true;
   report.status = report.ok ? 'discovery-complete-teor-pendente' : 'blocked';
@@ -580,6 +727,20 @@ async function main() {
       reason: report.jusbrLogin.reason,
       title: report.jusbrLogin.title,
       url: report.jusbrLogin.url
+    } : null,
+    tribunalProbes: report.tribunalProbes ? {
+      ok: report.tribunalProbes.ok,
+      status: report.tribunalProbes.status,
+      probes: report.tribunalProbes.probes ? report.tribunalProbes.probes.map((probe) => ({
+        ok: probe.ok,
+        status: probe.status,
+        stage: probe.stage,
+        reason: probe.reason,
+        cnj: probe.cnj,
+        tribunal: probe.tribunal,
+        title: probe.title,
+        url: probe.url
+      })) : []
     } : null,
     blockers: report.blockers
   };
