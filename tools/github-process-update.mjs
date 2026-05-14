@@ -1017,7 +1017,11 @@ async function tryEprocLogin(page, eproc) {
 
   await clickFirstVisible(page, [
     '#sbmEntrar',
+    '#sbmEnviar',
     'button:has-text("Entrar")',
+    'button:has-text("Enviar")',
+    'input[type="submit"][value*="Entrar"]',
+    'input[type="submit"][value*="Enviar"]',
     'input[type="submit"]',
     'input[type="button"][value*="Entrar"]'
   ], 8000);
@@ -1034,7 +1038,8 @@ async function tryEprocLogin(page, eproc) {
     reason: rejected ? 'eproc recusou login ou solicitou autenticacao adicional.' : (loginPage ? 'eproc permaneceu na tela de login ou encerrou a sessao apos envio das credenciais.' : undefined),
     url: page.url(),
     title,
-    textSample
+    textSample,
+    diagnostics: loginPage ? await collectSearchFieldDiagnostics(page) : undefined
   };
 }
 
@@ -1050,7 +1055,8 @@ async function searchEprocProcess(page, process, eproc) {
       tribunal: eproc?.name || 'eproc',
       url: login.url,
       title: login.title,
-      textSample: login.textSample
+      textSample: login.textSample,
+      diagnostics: login.diagnostics
     };
   }
 
