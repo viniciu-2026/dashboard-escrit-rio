@@ -557,6 +557,19 @@ function tribunalTargetForCnj(cnj) {
   return null;
 }
 
+function splitCnj(cnj) {
+  const match = /^(\d{7})-(\d{2})\.(\d{4})\.(\d)\.(\d{2})\.(\d{4})$/.exec(String(cnj || '').trim());
+  if (!match) return null;
+  return {
+    sequencial: match[1],
+    digito: match[2],
+    ano: match[3],
+    justica: match[4],
+    tribunal: match[5],
+    origem: match[6]
+  };
+}
+
 async function tryTribunalPasswordLogin(page, tribunal) {
   const user = tribunal.loginUser;
   const password = tribunal.loginPassword;
@@ -630,12 +643,169 @@ async function tryTribunalPasswordLogin(page, tribunal) {
   };
 }
 
+async function gotoPjeProcessSearch(page) {
+  const candidates = [
+    'https://tjrj.pje.jus.br/1g/Processo/ConsultaProcesso/listView.seam',
+    'https://tjrj.pje.jus.br/pje/Processo/ConsultaProcesso/listView.seam'
+  ];
+
+  for (const url of candidates) {
+    try {
+      await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
+      await page.waitForTimeout(1500);
+      const textSample = await getVisibleTextSample(page);
+      if (/consulta|pesquisar|processo/i.test(textSample) && !/loginOld\.seam|Identifique-se/i.test(page.url())) {
+        return { ok: true, url: page.url(), title: await page.title(), textSample };
+      }
+    } catch {
+      // Try the next URL.
+    }
+  }
+
+  return {
+    ok: false,
+    status: 'pje-search-page-not-opened',
+    reason: 'Nao consegui abrir a tela autenticada de consulta processual do PJe.',
+    url: page.url(),
+    title: await page.title(),
+    textSample: await getVisibleTextSample(page)
+  };
+}
+
+async function fillPjeSegment(page, selectors, value) {
+  for (const selector of selectors) {
+    try {
+      const locator = page.locator(selector).first();
+      await locator.waitFor({ state: 'visible', timeout: 3000 });
+      await locator.fill(value);
+      return true;
+    } catch {
+      // Try next selector.
+    }
+  }
+  return false;
+}
+
+async function searchPjeProcess(page, process) {
+  const parts = splitCnj(process.cnj);
+  if (!parts) {
+    return {
+      ok: false,
+      status: 'invalid-cnj',
+      cnj: process.cnj,
+      reason: 'Numero CNJ invalido para pesquisa segmentada.'
+    };
+  }
+
+  const searchPage = await gotoPjeProcessSearch(page);
+  if (!searchPage.ok) return { ...searchPage, ok: false, cnj: process.cnj, cliente: process.cliente };
+
+  const fills = {
+    sequencial: await fillPjeSegment(page, [
+      'input[id*="numeroSequencial"]',
+      'input[name*="numeroSequencial"]',
+      'input[id*="inputNumeroProcesso"]',
+      'input[name*="inputNumeroProcesso"]'
+    ], parts.sequencial),
+    digito: await fillPjeSegment(page, [
+      'input[id*="Digito"]',
+      'input[id*="digito"]',
+      'input[name*="Digito"]',
+      'input[name*="digito"]'
+    ], parts.digito),
+    ano: await fillPjeSegment(page, [
+      'input[id*="Ano"]',
+      'input[id*="ano"]',
+      'input[name*="Ano"]',
+      'input[name*="ano"]'
+    ], parts.ano),
+    justica: await fillPjeSegment(page, [
+      'input[id*="ramoJustica"]',
+      'input[name*="ramoJustica"]',
+      'input[id*="Justica"]',
+      'input[id*="justica"]'
+    ], parts.justica),
+    tribunal: await fillPjeSegment(page, [
+      'input[id*="respectivoTribunal"]',
+      'input[name*="respectivoTribunal"]',
+      'input[id*="Tribunal"]',
+      'input[id*="tribunal"]'
+    ], parts.tribunal),
+    origem: await fillPjeSegment(page, [
+      'input[id*="NumeroOrigem"]',
+      'input[id*="numeroOrigem"]',
+      'input[name*="NumeroOrigem"]',
+      'input[name*="numeroOrigem"]',
+      'input[id*="Origem"]',
+      'input[id*="origem"]'
+    ], parts.origem)
+  };
+
+  if (!Object.values(fills).every(Boolean)) {
+    return {
+      ok: false,
+      status: 'pje-search-fields-not-found',
+      cnj: process.cnj,
+      cliente: process.cliente,
+      reason: 'Nao encontrei todos os campos segmentados de numero CNJ na tela de consulta do PJe.',
+      fills,
+      url: page.url(),
+      title: await page.title(),
+      textSample: await getVisibleTextSample(page)
+    };
+  }
+
+  await clickFirstVisible(page, [
+    'input[id*="searchProcessos"]',
+    'button[id*="searchProcessos"]',
+    'input[value*="Pesquisar"]',
+    'button:has-text("Pesquisar")',
+    page.getByRole('button', { name: /pesquisar|consultar/i })
+  ], 8000);
+  await page.waitForLoadState('domcontentloaded', { timeout: 30000 }).catch(() => {});
+  await page.waitForTimeout(3000);
+
+  const textSample = await getVisibleTextSample(page);
+  const found = textSample.includes(process.cnj) || textSample.includes(process.cnj.replace(/[^\d]/g, ''));
+
+  let opened = false;
+  if (found) {
+    opened = await clickFirstVisible(page, [
+      page.getByRole('link', { name: new RegExp(process.cnj.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')) }),
+      `a:has-text("${process.cnj}")`,
+      'a[title*="Detalhe"]',
+      'a[title*="detalhe"]',
+      'a[title*="Visualizar"]',
+      'a[title*="visualizar"]',
+      'a:has(i)'
+    ], 5000);
+    if (opened) {
+      await page.waitForLoadState('domcontentloaded', { timeout: 30000 }).catch(() => {});
+      await page.waitForTimeout(2000);
+    }
+  }
+
+  const detailText = opened ? await getVisibleTextSample(page) : textSample;
+  return {
+    ok: found,
+    status: found ? (opened ? 'pje-process-opened-teor-pending' : 'pje-process-found-open-pending') : 'pje-process-not-found',
+    cnj: process.cnj,
+    cliente: process.cliente,
+    dashboardId: process.dashboardId,
+    found,
+    opened,
+    url: page.url(),
+    title: await page.title(),
+    textSample: detailText
+  };
+}
+
 async function runTribunalProbes(report) {
   const processes = report.consolidated?.processes || [];
   const targets = processes
     .map((process) => ({ process, tribunal: tribunalTargetForCnj(process.cnj) }))
     .filter((item) => item.tribunal)
-    .slice(0, 1);
+    .slice(0, 6);
 
   if (!targets.length) {
     return {
@@ -660,62 +830,67 @@ async function runTribunalProbes(report) {
   const browser = await chromium.launch(browserLaunchOptions());
   try {
     const probes = [];
-    for (const target of targets) {
-      let page;
-      try {
-        page = await browser.newPage({ locale: 'pt-BR', timezoneId: 'America/Sao_Paulo' });
-        await page.goto(target.tribunal.url, { waitUntil: 'domcontentloaded', timeout: 30000 });
+    const first = targets[0];
+    const page = await browser.newPage({ locale: 'pt-BR', timezoneId: 'America/Sao_Paulo' });
+    try {
+      await page.goto(first.tribunal.url, { waitUntil: 'domcontentloaded', timeout: 30000 });
 
-        const govClicked = await clickFirstVisible(page, [
-          page.getByRole('button', { name: /gov\.br|entrar com gov/i }),
-          page.getByRole('link', { name: /gov\.br|entrar com gov/i }),
-          'button:has-text("gov.br")',
-          'a:has-text("gov.br")',
-          'input[value*="gov"]'
-        ], 5000);
+      const govClicked = await clickFirstVisible(page, [
+        page.getByRole('button', { name: /gov\.br|entrar com gov/i }),
+        page.getByRole('link', { name: /gov\.br|entrar com gov/i }),
+        'button:has-text("gov.br")',
+        'a:has-text("gov.br")',
+        'input[value*="gov"]'
+      ], 5000);
 
-        if (govClicked) {
-          await page.waitForLoadState('domcontentloaded', { timeout: 15000 }).catch(() => {});
-          await page.waitForTimeout(1500);
-        }
-
-        const govBlock = await detectGovbrBlock(page, 'tribunal-gov-login');
-        const passwordLogin = govBlock ? null : await tryTribunalPasswordLogin(page, target.tribunal);
-        const textSample = govBlock?.textSample || await getVisibleTextSample(page);
-        probes.push({
-          ok: !govBlock && (govClicked || passwordLogin?.ok),
-          status: govBlock ? 'blocked' : (passwordLogin?.ok ? passwordLogin.status : (govClicked ? 'gov-login-opened' : (passwordLogin?.status || 'gov-login-not-found'))),
-          stage: govBlock?.stage,
-          reason: govBlock?.reason || passwordLogin?.reason,
-          cnj: target.process.cnj,
-          tribunal: target.tribunal.name,
-          passwordLogin: passwordLogin ? {
-            attempted: passwordLogin.attempted,
-            ok: passwordLogin.ok,
-            status: passwordLogin.status,
-            reason: passwordLogin.reason
-          } : null,
-          url: page.url(),
-          title: await page.title(),
-          textSample
-        });
-      } catch (error) {
-        probes.push({
-          ok: false,
-          status: 'blocked',
-          cnj: target.process.cnj,
-          tribunal: target.tribunal.name,
-          reason: 'Falha ao abrir o tribunal para prova de fallback.',
-          error: String(error.message || error)
-        });
-      } finally {
-        if (page) await page.close().catch(() => {});
+      if (govClicked) {
+        await page.waitForLoadState('domcontentloaded', { timeout: 15000 }).catch(() => {});
+        await page.waitForTimeout(1500);
       }
+
+      const govBlock = await detectGovbrBlock(page, 'tribunal-gov-login');
+      const passwordLogin = govBlock ? null : await tryTribunalPasswordLogin(page, first.tribunal);
+      const textSample = govBlock?.textSample || await getVisibleTextSample(page);
+      const loggedIn = !govBlock && (govClicked || passwordLogin?.ok);
+      probes.push({
+        ok: loggedIn,
+        status: govBlock ? 'blocked' : (passwordLogin?.ok ? passwordLogin.status : (govClicked ? 'gov-login-opened' : (passwordLogin?.status || 'gov-login-not-found'))),
+        stage: govBlock?.stage,
+        reason: govBlock?.reason || passwordLogin?.reason,
+        cnj: first.process.cnj,
+        tribunal: first.tribunal.name,
+        passwordLogin: passwordLogin ? {
+          attempted: passwordLogin.attempted,
+          ok: passwordLogin.ok,
+          status: passwordLogin.status,
+          reason: passwordLogin.reason
+        } : null,
+        url: page.url(),
+        title: await page.title(),
+        textSample
+      });
+
+      if (loggedIn) {
+        for (const target of targets) {
+          probes.push(await searchPjeProcess(page, target.process));
+        }
+      }
+    } catch (error) {
+      probes.push({
+        ok: false,
+        status: 'blocked',
+        cnj: first.process.cnj,
+        tribunal: first.tribunal.name,
+        reason: 'Falha ao abrir o tribunal para prova de fallback.',
+        error: String(error.message || error)
+      });
+    } finally {
+      await page.close().catch(() => {});
     }
 
     return {
-      ok: probes.every((probe) => probe.ok),
-      status: probes.every((probe) => probe.ok) ? 'tribunal-gov-login-probed' : 'tribunal-login-blocked',
+      ok: probes.some((probe) => probe.status === 'tribunal-password-login-complete') && probes.some((probe) => /^pje-process-/.test(probe.status || '')),
+      status: probes.some((probe) => /^pje-process-opened/.test(probe.status || '')) ? 'pje-processes-opened-teor-pending' : (probes.some((probe) => probe.status === 'tribunal-password-login-complete') ? 'pje-login-complete-search-pending' : 'tribunal-login-blocked'),
       probes
     };
   } finally {
@@ -744,6 +919,7 @@ async function main() {
       hasFirebaseServiceAccountJson: has('FIREBASE_SERVICE_ACCOUNT_JSON'),
       hasGmailCredentialHint: has('GMAIL_OAUTH_JSON') || (has('GMAIL_REFRESH_TOKEN') && has('GMAIL_CLIENT_ID') && has('GMAIL_CLIENT_SECRET')) || has('GMAIL_CONNECTOR_AVAILABLE')
     },
+    warnings: [],
     blockers: []
   };
 
@@ -831,7 +1007,7 @@ async function main() {
   if (report.blockers.length === 0) {
     report.jusbrLogin = await runJusbrGovLogin(report);
     if (!report.jusbrLogin.ok) {
-      report.blockers.push(`Login Jus.br/GOV bloqueado: ${report.jusbrLogin.reason || report.jusbrLogin.status}`);
+      report.warnings.push(`Login Jus.br/GOV bloqueado; prosseguindo pelo tribunal conforme regra de fallback: ${report.jusbrLogin.reason || report.jusbrLogin.status}`);
     }
   }
 
@@ -839,6 +1015,8 @@ async function main() {
     report.tribunalProbes = await runTribunalProbes(report);
     if (!report.tribunalProbes.ok) {
       report.blockers.push(`Login no tribunal bloqueado: ${report.tribunalProbes.reason || report.tribunalProbes.status}`);
+    } else {
+      report.blockers.push('Processos localizados/abertos no tribunal, mas leitura automatica do teor dos andamentos ainda nao foi concluida.');
     }
   }
 
@@ -886,6 +1064,7 @@ async function main() {
         url: probe.url
       })) : []
     } : null,
+    warnings: report.warnings,
     blockers: report.blockers
   };
 
