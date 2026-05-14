@@ -261,14 +261,24 @@ async function runBrowserSmoke(report) {
   const browser = await chromium.launch(browserLaunchOptions());
   try {
     const page = await browser.newPage({ locale: 'pt-BR', timezoneId: 'America/Sao_Paulo' });
-    await page.goto(process.env.JUSBR_URL || 'https://jus.br', { waitUntil: 'domcontentloaded', timeout: 60000 });
-    report.browser = {
-      ok: true,
-      status: 'browser-ready',
-      title: await page.title(),
-      url: page.url()
-    };
-    return true;
+    try {
+      await page.goto(process.env.JUSBR_URL || 'https://jus.br', { waitUntil: 'domcontentloaded', timeout: 30000 });
+      report.browser = {
+        ok: true,
+        status: 'browser-ready',
+        title: await page.title(),
+        url: page.url()
+      };
+      return true;
+    } catch (error) {
+      report.browser = {
+        ok: false,
+        status: 'jusbr-smoke-timeout',
+        reason: 'Smoke test do Jus.br falhou/expirou; a rotina deve seguir para Gmail e tribunal.',
+        error: String(error.message || error)
+      };
+      return false;
+    }
   } finally {
     await browser.close();
   }
