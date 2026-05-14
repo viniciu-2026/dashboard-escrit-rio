@@ -1268,9 +1268,14 @@ async function runTribunalProbes(report) {
       await page.close().catch(() => {});
     }
 
+    const processOpened = probes.some((probe) => /process-opened/.test(probe.status || ''));
+    const processFound = probes.some((probe) => /process-(opened|found)/.test(probe.status || ''));
+    const eprocCaptcha = probes.some((probe) => (probe.diagnostics || []).some((field) => /cf-turnstile-response|hdnInfraCaptcha/i.test(`${field.id || ''} ${field.name || ''}`)));
+    const tribunalLoggedIn = probes.some((probe) => probe.status === 'tribunal-password-login-complete' || probe.status === 'eproc-login-complete');
     return {
-      ok: probes.some((probe) => /process-(opened|found)/.test(probe.status || '')),
-      status: probes.some((probe) => /process-opened/.test(probe.status || '')) ? 'tribunal-processes-opened-teor-pending' : (probes.some((probe) => probe.status === 'tribunal-password-login-complete' || probe.status === 'eproc-login-complete') ? 'tribunal-login-complete-search-pending' : 'tribunal-login-blocked'),
+      ok: processFound,
+      status: processOpened ? 'tribunal-processes-opened-teor-pending' : (eprocCaptcha ? 'eproc-login-blocked-by-cloudflare-captcha' : (tribunalLoggedIn ? 'tribunal-login-complete-search-pending' : 'tribunal-login-blocked')),
+      reason: eprocCaptcha ? 'O TJRJ eproc exibiu Cloudflare Turnstile/captcha no runner do GitHub Actions, impedindo login automatico com CPF/senha.' : undefined,
       probes
     };
   } finally {
@@ -1405,7 +1410,7 @@ async function main() {
   if (report.consolidated?.totalToVerifyInTribunals > 0) {
     report.tribunalProbes = await runTribunalProbes(report);
     if (!report.tribunalProbes.ok) {
-      report.blockers.push(`Login no tribunal bloqueado: ${report.tribunalProbes.reason || report.tribunalProbes.status}`);
+      report.blockers.push(`Nao foi possivel abrir os processos no tribunal para ler o teor: ${report.tribunalProbes.reason || report.tribunalProbes.status}`);
     } else {
       report.blockers.push('Processos localizados/abertos no tribunal, mas leitura automatica do teor dos andamentos ainda nao foi concluida.');
     }
