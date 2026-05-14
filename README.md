@@ -95,7 +95,6 @@ Cadastre os Secrets abaixo em `Settings > Secrets and variables > Actions` antes
 
 - `GOVBR_CPF`
 - `GOVBR_PASSWORD`
-- `JUSBR_CPF` e `JUSBR_PASSWORD`, se o Portal Jus.br/PJe usar senha diferente do GOV.BR
 - `FIREBASE_DATABASE_AUTH_TOKEN` ou `FIREBASE_SERVICE_ACCOUNT_JSON`
 - `GMAIL_OAUTH_JSON`, ou o trio `GMAIL_REFRESH_TOKEN`, `GMAIL_CLIENT_ID` e `GMAIL_CLIENT_SECRET`, para a etapa obrigatoria de pushes por e-mail
 

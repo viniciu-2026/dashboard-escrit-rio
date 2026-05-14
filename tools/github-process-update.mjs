@@ -313,8 +313,8 @@ async function runJusbrGovLogin(report) {
 
   const browser = await chromium.launch({ headless: true });
   const page = await browser.newPage({ locale: 'pt-BR', timezoneId: 'America/Sao_Paulo' });
-  const loginCpf = secretValue('JUSBR_CPF', 'GOVBR_CPF');
-  const loginPassword = secretValue('JUSBR_PASSWORD', 'GOVBR_PASSWORD');
+  const loginCpf = secretValue('GOVBR_CPF');
+  const loginPassword = secretValue('GOVBR_PASSWORD');
   try {
     await page.goto(process.env.JUSBR_URL || 'https://www.jus.br/servicos/', { waitUntil: 'domcontentloaded', timeout: 60000 });
 
@@ -329,6 +329,19 @@ async function runJusbrGovLogin(report) {
 
     if (govClicked) {
       await page.waitForLoadState('domcontentloaded', { timeout: 30000 }).catch(() => {});
+    }
+
+    const portalGovClicked = await clickFirstVisible(page, [
+      page.getByRole('button', { name: /entrar com gov\.?br/i }),
+      page.getByRole('link', { name: /entrar com gov\.?br/i }),
+      'button:has-text("Entrar com gov")',
+      'a:has-text("Entrar com gov")',
+      'input[value*="gov"]'
+    ], 8000);
+
+    if (portalGovClicked) {
+      await page.waitForLoadState('domcontentloaded', { timeout: 30000 }).catch(() => {});
+      await page.waitForTimeout(1500);
     }
 
     const cpfFilled = await fillFirstVisible(page, [
@@ -393,7 +406,7 @@ async function runJusbrGovLogin(report) {
         ok: false,
         status: 'blocked',
         stage: 'post-password',
-        reason: 'Portal Jus.br/PJe recusou CPF/senha. Configure JUSBR_CPF/JUSBR_PASSWORD se a senha for diferente do GOV.BR.',
+        reason: 'GOV.BR recusou CPF/senha ou o fluxo retornou erro de credenciais.',
         url: page.url(),
         title: await page.title(),
         textSample
