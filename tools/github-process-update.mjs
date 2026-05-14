@@ -588,7 +588,7 @@ function tribunalTargetForCnj(cnj) {
       loginPassword: secretValue('TRIBUNAL_PASSWORD'),
       dcp: {
         name: 'TJRJ Portal de Serviços/DCP',
-        url: 'https://www3.tjrj.jus.br/portalservicos',
+        url: 'https://www3.tjrj.jus.br/idserverjus-front/#/login?indGet=true&sgSist=PORTALSERVICOS',
         loginUser: secretValue('DCP_CPF', 'EPROC_CPF') || secretValue('TRIBUNAL_CPF'),
         loginPassword: secretValue('DCP_PASSWORD', 'EPROC_PASSWORD') || secretValue('TRIBUNAL_PASSWORD')
       }
@@ -1173,11 +1173,17 @@ async function tryDcpLogin(page, dcp) {
     '#login',
     '#usuario',
     '#txtUsuario',
+    '#mat-input-0',
     'input[name="username"]',
     'input[name="login"]',
     'input[name="usuario"]',
     'input[name*="Usuario"]',
+    'input[formcontrolname*="login" i]',
+    'input[formcontrolname*="usuario" i]',
+    'input[aria-label*="login" i]',
+    'input[aria-label*="usu" i]',
     'input[placeholder*="CPF" i]',
+    'input[placeholder*="Usu" i]',
     'input[placeholder*="Login" i]',
     'input[type="text"]'
   ], dcp.loginUser, 8000);
@@ -1186,9 +1192,13 @@ async function tryDcpLogin(page, dcp) {
     '#password',
     '#senha',
     '#pwdSenha',
+    '#mat-input-1',
     'input[name="password"]',
     'input[name="senha"]',
     'input[name*="Senha"]',
+    'input[formcontrolname*="senha" i]',
+    'input[formcontrolname*="password" i]',
+    'input[aria-label*="senha" i]',
     'input[placeholder*="Senha" i]',
     'input[type="password"]'
   ], dcp.loginPassword, 8000);
