@@ -549,10 +549,85 @@ function tribunalTargetForCnj(cnj) {
   if (String(cnj || '').includes('.8.19.')) {
     return {
       name: 'TJRJ PJe 1g',
-      url: 'https://tjrj.pje.jus.br/1g/login.seam'
+      url: 'https://tjrj.pje.jus.br/1g/loginOld.seam',
+      loginUser: secretValue('TRIBUNAL_CPF', 'GOVBR_CPF'),
+      loginPassword: secretValue('TRIBUNAL_PASSWORD', 'GOVBR_PASSWORD')
     };
   }
   return null;
+}
+
+async function tryTribunalPasswordLogin(page, tribunal) {
+  const user = tribunal.loginUser;
+  const password = tribunal.loginPassword;
+  if (!user || !password) {
+    return {
+      attempted: false,
+      ok: false,
+      status: 'tribunal-password-secrets-missing',
+      reason: 'Faltam Secrets TRIBUNAL_CPF/TRIBUNAL_PASSWORD ou fallback GOVBR_CPF/GOVBR_PASSWORD para login direto no tribunal.'
+    };
+  }
+
+  const userFilled = await fillFirstVisible(page, [
+    '#username',
+    '#login',
+    '#j_username',
+    'input[name="username"]',
+    'input[name="login"]',
+    'input[name="j_username"]',
+    'input[type="text"]',
+    'input[type="tel"]'
+  ], user, 8000);
+
+  const passwordFilled = await fillFirstVisible(page, [
+    '#password',
+    '#senha',
+    '#j_password',
+    'input[name="password"]',
+    'input[name="senha"]',
+    'input[name="j_password"]',
+    'input[type="password"]'
+  ], password, 8000);
+
+  if (!userFilled || !passwordFilled) {
+    return {
+      attempted: true,
+      ok: false,
+      status: 'tribunal-password-fields-not-found',
+      reason: 'Nao encontrei os campos de usuario/senha do tribunal na tela do PJe.'
+    };
+  }
+
+  await clickFirstVisible(page, [
+    '#btnEntrar',
+    '#kc-login',
+    'input[type="submit"]',
+    'button[type="submit"]',
+    page.getByRole('button', { name: /entrar|acessar|login/i }),
+    page.getByRole('link', { name: /entrar|acessar|login/i })
+  ], 8000);
+  await page.waitForLoadState('domcontentloaded', { timeout: 30000 }).catch(() => {});
+  await page.waitForTimeout(3000);
+
+  const textSample = await getVisibleTextSample(page);
+  const lower = textSample.toLowerCase();
+  if (/inv[aá]lid|incorret|erro.*login|usu[aá]rio|senha/.test(lower) && /inv[aá]lid|incorret|erro/.test(lower)) {
+    return {
+      attempted: true,
+      ok: false,
+      status: 'tribunal-password-rejected',
+      reason: 'O tribunal recusou usuario/senha ou retornou erro de login.',
+      textSample
+    };
+  }
+
+  return {
+    attempted: true,
+    ok: !/loginOld\.seam|mensagem-erro-login|login\.seam/i.test(page.url()),
+    status: /loginOld\.seam|mensagem-erro-login|login\.seam/i.test(page.url()) ? 'tribunal-password-login-not-confirmed' : 'tribunal-password-login-complete',
+    textSample
+  };
 }
 
 async function runTribunalProbes(report) {
@@ -605,14 +680,21 @@ async function runTribunalProbes(report) {
         }
 
         const govBlock = await detectGovbrBlock(page, 'tribunal-gov-login');
+        const passwordLogin = govBlock ? null : await tryTribunalPasswordLogin(page, target.tribunal);
         const textSample = govBlock?.textSample || await getVisibleTextSample(page);
         probes.push({
-          ok: !govBlock && govClicked,
-          status: govBlock ? 'blocked' : (govClicked ? 'gov-login-opened' : 'gov-login-not-found'),
+          ok: !govBlock && (govClicked || passwordLogin?.ok),
+          status: govBlock ? 'blocked' : (passwordLogin?.ok ? passwordLogin.status : (govClicked ? 'gov-login-opened' : (passwordLogin?.status || 'gov-login-not-found'))),
           stage: govBlock?.stage,
-          reason: govBlock?.reason,
+          reason: govBlock?.reason || passwordLogin?.reason,
           cnj: target.process.cnj,
           tribunal: target.tribunal.name,
+          passwordLogin: passwordLogin ? {
+            attempted: passwordLogin.attempted,
+            ok: passwordLogin.ok,
+            status: passwordLogin.status,
+            reason: passwordLogin.reason
+          } : null,
           url: page.url(),
           title: await page.title(),
           textSample
