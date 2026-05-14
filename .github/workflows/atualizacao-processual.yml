@@ -17,6 +17,7 @@ jobs:
 
     env:
       TZ: America/Sao_Paulo
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
       GOVBR_CPF: ${{ secrets.GOVBR_CPF }}
       GOVBR_PASSWORD: ${{ secrets.GOVBR_PASSWORD }}
       TRIBUNAL_CPF: ${{ secrets.TRIBUNAL_CPF }}
@@ -84,13 +85,13 @@ jobs:
 
       - name: Rodar atualizacao processual
         shell: bash
-        timeout-minutes: 20
+        timeout-minutes: 30
         run: |
           mkdir -p automation-report
           echo "Executando preflight..."
           timeout 180s pwsh -NoProfile -ExecutionPolicy Bypass -File ./tools/run-process-update.ps1 | tee automation-report/preflight.json
           echo "Executando runner Node/Playwright..."
-          timeout 420s xvfb-run -a node ./tools/github-process-update.mjs --report-dir automation-report | tee automation-report/github-process-update.log
+          timeout 900s xvfb-run -a node ./tools/github-process-update.mjs --report-dir automation-report | tee automation-report/github-process-update.log
 
       - name: Publicar relatorio de automacao
         if: always()

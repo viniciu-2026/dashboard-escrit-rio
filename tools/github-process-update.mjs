@@ -861,9 +861,7 @@ async function tryPjeAdvogadoPanelSearch(page, process) {
   const digits = process.cnj.replace(/[^\d]/g, '');
   const candidates = [
     'https://tjrj.pje.jus.br/1g/Painel/painel_usuario/advogado.seam',
-    'https://tjrj.pje.jus.br/1g/Processo/ConsultaProcesso/listView.seam',
-    'https://tjrj.pje.jus.br/pje/Painel/painel_usuario/advogado.seam',
-    'https://tjrj.pje.jus.br/pje/Processo/ConsultaProcesso/listView.seam'
+    'https://tjrj.pje.jus.br/1g/Processo/ConsultaProcesso/listView.seam'
   ];
   const attempts = [];
 
@@ -890,6 +888,15 @@ async function tryPjeAdvogadoPanelSearch(page, process) {
         };
       }
 
+      await clickFirstVisible(page, [
+        page.getByRole('tab', { name: /acervo/i }),
+        page.getByRole('link', { name: /^acervo$/i }),
+        page.getByText(/^ACERVO$/i),
+        'a:has-text("ACERVO")',
+        'button:has-text("ACERVO")'
+      ], 2000);
+      await page.waitForTimeout(1500);
+
       for (const value of [process.cnj, digits]) {
         const filled = await fillFirstCandidate(page, [
           page.getByLabel(/processo|pesquisar|buscar|filtro|consulta/i),
@@ -903,9 +910,11 @@ async function tryPjeAdvogadoPanelSearch(page, process) {
           'input[name*="pesquisa" i]',
           'input[id*="search" i]',
           'input[name*="search" i]',
+          'input[id*="globalFilter" i]',
+          'input[name*="globalFilter" i]',
           'input[type="search"]',
           'input[type="text"]'
-        ], value, 5000);
+        ], value, 3000);
 
         if (!filled) {
           attempts.push({ url: page.url(), valueKind: value === process.cnj ? 'formatted' : 'digits', status: 'search-input-not-found', title: await page.title(), textSample: text.slice(0, 700) });
@@ -920,7 +929,7 @@ async function tryPjeAdvogadoPanelSearch(page, process) {
           'input[type="submit"][value*="Pesquisar"]',
           'input[type="button"][value*="Pesquisar"]',
           'input[type="submit"]'
-        ], 5000);
+        ], 3000);
         await page.keyboard.press('Enter').catch(() => {});
         await page.waitForLoadState('domcontentloaded', { timeout: 30000 }).catch(() => {});
         await page.waitForTimeout(4000);
