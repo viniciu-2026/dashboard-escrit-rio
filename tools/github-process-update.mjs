@@ -108,6 +108,15 @@ function uniqueCnjsFromText(text) {
   return [...seen];
 }
 
+function urlsFromText(text) {
+  const seen = new Set();
+  for (const match of String(text || '').matchAll(/https?:\/\/[^\s"'<>]+/gi)) {
+    const url = match[0].replace(/[).,;]+$/g, '');
+    if (/pje|tjrj|eproc|jus\.br/i.test(url)) seen.add(url);
+  }
+  return [...seen].slice(0, 10);
+}
+
 async function readFirebaseProcesses() {
   const response = await fetch(firebaseUrl, { headers: { 'Cache-Control': 'no-cache' } });
   if (!response.ok) {
@@ -194,6 +203,7 @@ async function discoverGmailPushes({ fromPtBr, dashboardByCnj }) {
       const bodyText = collectMessageText(detail.payload).join('\n');
       const searchable = `${subject}\n${from}\n${date}\n${detail.snippet || ''}\n${bodyText}`;
       const cnjs = uniqueCnjsFromText(searchable);
+      const urls = urlsFromText(searchable);
 
       if (cnjs.length) {
         inspectedMessages.push({
@@ -214,15 +224,20 @@ async function discoverGmailPushes({ fromPtBr, dashboardByCnj }) {
           dashboardId: dashboardByCnj.get(cnj)?.id || '',
           cliente: dashboardByCnj.get(cnj)?.cl || '',
           messageCount: 0,
+          candidateLinks: [],
           messages: []
         };
         current.messageCount += 1;
+        for (const url of urls) {
+          if (!current.candidateLinks.includes(url)) current.candidateLinks.push(url);
+        }
         current.messages.push({
           id: detail.id,
           threadId: detail.threadId,
           subject,
           from,
           date,
+          candidateLinks: urls,
           snippet: detail.snippet || ''
         });
         foundByCnj.set(cnj, current);
@@ -785,6 +800,33 @@ async function tryPjeFreeSearch(page, process) {
 }
 
 async function searchPjeProcess(page, process) {
+  for (const link of process.candidateLinks || []) {
+    if (!/tjrj\.pje|pje\.jus|pje/i.test(link)) continue;
+    try {
+      await page.goto(link, { waitUntil: 'domcontentloaded', timeout: 30000 });
+      await page.waitForTimeout(3000);
+      const textSample = await getVisibleTextSample(page);
+      const found = textSample.includes(process.cnj) || textSample.includes(process.cnj.replace(/[^\d]/g, ''));
+      if (found || /detalhe|autos|movimenta|documento|expediente|processo/i.test(textSample)) {
+        return {
+          ok: true,
+          status: 'pje-process-opened-from-push-link-teor-pending',
+          cnj: process.cnj,
+          cliente: process.cliente,
+          dashboardId: process.dashboardId,
+          found,
+          opened: true,
+          sourceLink: link,
+          url: page.url(),
+          title: await page.title(),
+          textSample
+        };
+      }
+    } catch {
+      // Try the normal PJe search flow below.
+    }
+  }
+
   const parts = splitCnj(process.cnj);
   if (!parts) {
     return {
@@ -1097,7 +1139,8 @@ async function main() {
         knownInDashboard: item.knownInDashboard,
         dashboardId: item.dashboardId,
         cliente: item.cliente,
-        messageCount: item.messageCount
+        messageCount: item.messageCount,
+        candidateLinks: item.candidateLinks || []
       })) : []
     };
   } catch (error) {
