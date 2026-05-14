@@ -24,6 +24,20 @@ function secretValue(name, fallbackName = '') {
   return '';
 }
 
+function browserHeadless() {
+  return String(process.env.BROWSER_HEADLESS || 'true').toLowerCase() !== 'false';
+}
+
+function browserLaunchOptions() {
+  return {
+    headless: browserHeadless(),
+    args: [
+      '--disable-blink-features=AutomationControlled',
+      '--disable-dev-shm-usage'
+    ]
+  };
+}
+
 function ptBrDateToTime(value) {
   const match = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(String(value || '').trim());
   if (!match) return 0;
@@ -244,7 +258,7 @@ async function runBrowserSmoke(report) {
     return false;
   }
 
-  const browser = await chromium.launch({ headless: true });
+  const browser = await chromium.launch(browserLaunchOptions());
   try {
     const page = await browser.newPage({ locale: 'pt-BR', timezoneId: 'America/Sao_Paulo' });
     await page.goto(process.env.JUSBR_URL || 'https://jus.br', { waitUntil: 'domcontentloaded', timeout: 60000 });
@@ -392,7 +406,7 @@ async function runJusbrGovLogin(report) {
     };
   }
 
-  const browser = await chromium.launch({ headless: true });
+  const browser = await chromium.launch(browserLaunchOptions());
   const page = await browser.newPage({ locale: 'pt-BR', timezoneId: 'America/Sao_Paulo' });
   const loginCpf = secretValue('GOVBR_CPF');
   const loginPassword = secretValue('GOVBR_PASSWORD');
@@ -568,7 +582,7 @@ async function runTribunalProbes(report) {
     };
   }
 
-  const browser = await chromium.launch({ headless: true });
+  const browser = await chromium.launch(browserLaunchOptions());
   try {
     const probes = [];
     for (const target of targets) {
