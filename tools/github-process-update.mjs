@@ -18,6 +18,12 @@ function has(name) {
   return Boolean(process.env[name] && String(process.env[name]).trim());
 }
 
+function secretValue(name, fallbackName = '') {
+  if (has(name)) return String(process.env[name]).trim();
+  if (fallbackName && has(fallbackName)) return String(process.env[fallbackName]).trim();
+  return '';
+}
+
 function ptBrDateToTime(value) {
   const match = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(String(value || '').trim());
   if (!match) return 0;
@@ -307,6 +313,8 @@ async function runJusbrGovLogin(report) {
 
   const browser = await chromium.launch({ headless: true });
   const page = await browser.newPage({ locale: 'pt-BR', timezoneId: 'America/Sao_Paulo' });
+  const loginCpf = secretValue('JUSBR_CPF', 'GOVBR_CPF');
+  const loginPassword = secretValue('JUSBR_PASSWORD', 'GOVBR_PASSWORD');
   try {
     await page.goto(process.env.JUSBR_URL || 'https://www.jus.br/servicos/', { waitUntil: 'domcontentloaded', timeout: 60000 });
 
@@ -330,7 +338,7 @@ async function runJusbrGovLogin(report) {
       'input[name="username"]',
       'input[type="tel"]',
       'input[type="text"]'
-    ], process.env.GOVBR_CPF, 15000);
+    ], loginCpf, 15000);
 
     if (!cpfFilled) {
       return {
@@ -356,7 +364,7 @@ async function runJusbrGovLogin(report) {
       '#password',
       'input[name="password"]',
       'input[type="password"]'
-    ], process.env.GOVBR_PASSWORD, 20000);
+    ], loginPassword, 20000);
 
     if (!passwordFilled) {
       return {
@@ -380,6 +388,18 @@ async function runJusbrGovLogin(report) {
 
     const textSample = await getVisibleTextSample(page);
     const lower = textSample.toLowerCase();
+    if (/usu[aá]rio ou senha inv[aá]lido|senha inv[aá]lida|credenciais inv[aá]lidas|login inv[aá]lido/.test(lower)) {
+      return {
+        ok: false,
+        status: 'blocked',
+        stage: 'post-password',
+        reason: 'Portal Jus.br/PJe recusou CPF/senha. Configure JUSBR_CPF/JUSBR_PASSWORD se a senha for diferente do GOV.BR.',
+        url: page.url(),
+        title: await page.title(),
+        textSample
+      };
+    }
+
     if (/captcha|verifica|código|codigo|duas etapas|validação|validacao|autenticador/.test(lower)) {
       return {
         ok: false,
@@ -421,6 +441,8 @@ async function main() {
       githubActions: process.env.GITHUB_ACTIONS === 'true',
       hasGovbrCpf: has('GOVBR_CPF'),
       hasGovbrPassword: has('GOVBR_PASSWORD'),
+      hasJusbrCpf: has('JUSBR_CPF'),
+      hasJusbrPassword: has('JUSBR_PASSWORD'),
       hasFirebaseDatabaseAuthToken: has('FIREBASE_DATABASE_AUTH_TOKEN'),
       hasFirebaseServiceAccountJson: has('FIREBASE_SERVICE_ACCOUNT_JSON'),
       hasGmailCredentialHint: has('GMAIL_OAUTH_JSON') || (has('GMAIL_REFRESH_TOKEN') && has('GMAIL_CLIENT_ID') && has('GMAIL_CLIENT_SECRET')) || has('GMAIL_CONNECTOR_AVAILABLE')

@@ -19,6 +19,8 @@ jobs:
       TZ: America/Sao_Paulo
       GOVBR_CPF: ${{ secrets.GOVBR_CPF }}
       GOVBR_PASSWORD: ${{ secrets.GOVBR_PASSWORD }}
+      JUSBR_CPF: ${{ secrets.JUSBR_CPF }}
+      JUSBR_PASSWORD: ${{ secrets.JUSBR_PASSWORD }}
       FIREBASE_DATABASE_AUTH_TOKEN: ${{ secrets.FIREBASE_DATABASE_AUTH_TOKEN }}
       FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
       GMAIL_REFRESH_TOKEN: ${{ secrets.GMAIL_REFRESH_TOKEN }}
