@@ -112,7 +112,7 @@ function urlsFromText(text) {
   const seen = new Set();
   for (const match of String(text || '').matchAll(/https?:\/\/[^\s"'<>]+/gi)) {
     const url = match[0].replace(/[).,;]+$/g, '');
-    if (/pje|tjrj|eproc|jus\.br/i.test(url)) seen.add(url);
+    if (/pje|tjrj|portalservicos|jus\.br/i.test(url)) seen.add(url);
   }
   return [...seen].slice(0, 10);
 }
@@ -176,7 +176,7 @@ async function discoverGmailPushes({ fromPtBr, dashboardByCnj }) {
 
   const after = formatGmailDate(fromPtBr);
   const before = tomorrowGmailDate();
-  const queryTerms = '(processo OR processos OR intimação OR intimacao OR PJe OR PDPJ OR tribunal OR TJRJ OR TRF OR eproc OR "Diário de Justiça")';
+  const queryTerms = '(processo OR processos OR intimação OR intimacao OR PJe OR PDPJ OR tribunal OR TJRJ OR TRF OR DCP OR "Portal de Serviços" OR "Diário de Justiça")';
   const query = [after ? `after:${after}` : '', `before:${before}`, queryTerms].filter(Boolean).join(' ');
   const foundByCnj = new Map();
   const inspectedMessages = [];
@@ -586,11 +586,11 @@ function tribunalTargetForCnj(cnj) {
       url: 'https://tjrj.pje.jus.br/1g/loginOld.seam',
       loginUser: secretValue('TRIBUNAL_CPF'),
       loginPassword: secretValue('TRIBUNAL_PASSWORD'),
-      eproc: {
-        name: 'TJRJ eproc 1g',
-        url: 'https://eproc1g.tjrj.jus.br/eproc/',
-        loginUser: secretValue('EPROC_CPF'),
-        loginPassword: secretValue('EPROC_PASSWORD')
+      dcp: {
+        name: 'TJRJ Portal de Serviços/DCP',
+        url: 'https://www3.tjrj.jus.br/portalservicos',
+        loginUser: secretValue('DCP_CPF', 'EPROC_CPF') || secretValue('TRIBUNAL_CPF'),
+        loginPassword: secretValue('DCP_PASSWORD', 'EPROC_PASSWORD') || secretValue('TRIBUNAL_PASSWORD')
       }
     };
   }
@@ -1156,6 +1156,204 @@ async function searchPjeProcess(page, process) {
   };
 }
 
+async function tryDcpLogin(page, dcp) {
+  if (!dcp?.loginUser || !dcp?.loginPassword) {
+    return {
+      ok: false,
+      status: 'dcp-secrets-missing',
+      reason: 'Faltam Secrets DCP_CPF/DCP_PASSWORD ou credenciais equivalentes do Portal de Serviços.'
+    };
+  }
+
+  await page.goto(dcp.url, { waitUntil: 'domcontentloaded', timeout: 30000 });
+  await page.waitForTimeout(2500);
+
+  const userFilled = await fillFirstCandidate(page, [
+    '#username',
+    '#login',
+    '#usuario',
+    '#txtUsuario',
+    'input[name="username"]',
+    'input[name="login"]',
+    'input[name="usuario"]',
+    'input[name*="Usuario"]',
+    'input[placeholder*="CPF" i]',
+    'input[placeholder*="Login" i]',
+    'input[type="text"]'
+  ], dcp.loginUser, 8000);
+
+  const passwordFilled = await fillFirstCandidate(page, [
+    '#password',
+    '#senha',
+    '#pwdSenha',
+    'input[name="password"]',
+    'input[name="senha"]',
+    'input[name*="Senha"]',
+    'input[placeholder*="Senha" i]',
+    'input[type="password"]'
+  ], dcp.loginPassword, 8000);
+
+  if (!userFilled || !passwordFilled) {
+    return {
+      ok: false,
+      status: 'dcp-login-fields-not-found',
+      reason: 'Nao encontrei campos de usuario/senha do Portal de Serviços/DCP.',
+      url: page.url(),
+      title: await page.title(),
+      fields: await collectSearchFieldDiagnostics(page),
+      textSample: await getVisibleTextSample(page)
+    };
+  }
+
+  await clickFirstVisible(page, [
+    '#btnEntrar',
+    '#kc-login',
+    'button:has-text("Entrar")',
+    'input[type="submit"][value*="Entrar"]',
+    'input[type="submit"]',
+    'button[type="submit"]',
+    page.getByRole('button', { name: /entrar|acessar|enviar|login/i })
+  ], 8000);
+  await page.waitForLoadState('domcontentloaded', { timeout: 30000 }).catch(() => {});
+  await page.waitForTimeout(3000);
+
+  const textSample = await getVisibleText(page);
+  const lower = textSample.toLowerCase();
+  const needsEmailCode = /c[oó]digo de autentica[cç][aã]o|c[oó]digo de acesso|idserverjus|enviado.*e-mail|enviado.*email/.test(lower);
+  const rejected = /senha inv[aá]lida|usu[aá]rio inv[aá]lido|credenciais inv[aá]lidas|login inv[aá]lido|incorreto/.test(lower);
+  const stillLogin = /login|senha|entrar/.test(lower) && /portal de servi[cç]os|idserverjus|cpf|cnpj/.test(lower);
+
+  return {
+    ok: !needsEmailCode && !rejected && !stillLogin,
+    status: needsEmailCode ? 'dcp-email-code-required' : (rejected ? 'dcp-login-rejected' : (stillLogin ? 'dcp-login-not-complete' : 'dcp-login-complete')),
+    reason: needsEmailCode ? 'Portal de Serviços/DCP solicitou codigo de autenticacao enviado por e-mail.' : (rejected ? 'Portal de Serviços/DCP recusou usuario/senha.' : (stillLogin ? 'Portal de Serviços/DCP permaneceu na tela de login.' : undefined)),
+    url: page.url(),
+    title: await page.title(),
+    textSample
+  };
+}
+
+async function openDcpSearchArea(page) {
+  await clickFirstVisible(page, [
+    page.getByRole('link', { name: /consultas/i }),
+    page.getByRole('button', { name: /consultas/i }),
+    'a:has-text("Consultas")',
+    'button:has-text("Consultas")'
+  ], 3000);
+  await page.waitForTimeout(1000);
+  await clickFirstVisible(page, [
+    page.getByRole('link', { name: /consultas processuais|consulta processual/i }),
+    page.getByRole('button', { name: /consultas processuais|consulta processual/i }),
+    'a:has-text("Consultas Processuais")',
+    'a:has-text("Consulta Processual")',
+    'button:has-text("Consultas Processuais")',
+    'button:has-text("Consulta Processual")'
+  ], 3000);
+  await page.waitForLoadState('domcontentloaded', { timeout: 30000 }).catch(() => {});
+  await page.waitForTimeout(2500);
+}
+
+async function searchDcpProcess(page, process, dcp) {
+  const login = await tryDcpLogin(page, dcp);
+  if (!login.ok) {
+    return {
+      ok: false,
+      status: login.status,
+      reason: login.reason,
+      cnj: process.cnj,
+      cliente: process.cliente,
+      dashboardId: process.dashboardId,
+      tribunal: dcp?.name || 'TJRJ Portal de Serviços/DCP',
+      url: login.url,
+      title: login.title,
+      fields: login.fields,
+      textSample: login.textSample
+    };
+  }
+
+  await openDcpSearchArea(page);
+  const digits = process.cnj.replace(/[^\d]/g, '');
+  const attempts = [];
+
+  for (const value of [process.cnj, digits]) {
+    const filled = await fillFirstCandidate(page, [
+      page.getByLabel(/n[uú]mero|processo|pesquisar|busca/i),
+      'input[id*="numero" i]',
+      'input[name*="numero" i]',
+      'input[id*="processo" i]',
+      'input[name*="processo" i]',
+      'input[placeholder*="processo" i]',
+      'input[type="search"]',
+      'input[type="text"]'
+    ], value, 5000);
+
+    if (!filled) {
+      attempts.push({ valueKind: value === process.cnj ? 'formatted' : 'digits', status: 'search-input-not-found' });
+      continue;
+    }
+
+    await clickFirstVisible(page, [
+      page.getByRole('button', { name: /pesquisar|buscar|consultar/i }),
+      'button:has-text("Pesquisar")',
+      'button:has-text("Buscar")',
+      'input[type="submit"][value*="Pesquisar"]',
+      'input[type="button"][value*="Pesquisar"]',
+      'input[type="submit"]'
+    ], 5000);
+    await page.keyboard.press('Enter').catch(() => {});
+    await page.waitForLoadState('domcontentloaded', { timeout: 30000 }).catch(() => {});
+    await page.waitForTimeout(4000);
+
+    const textSample = await getVisibleText(page);
+    const found = pageTextHasCnj(textSample, process.cnj);
+    attempts.push({ valueKind: value === process.cnj ? 'formatted' : 'digits', status: found ? 'found' : 'not-found', url: page.url(), title: await page.title(), textSample: textSample.slice(0, 700) });
+    if (found) {
+      const opened = await openPjeResultIfVisible(page, process) || await clickFirstVisible(page, [
+        page.getByRole('link', { name: new RegExp(process.cnj.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')) }),
+        `a:has-text("${process.cnj}")`,
+        'button:has-text("Processo Eletrônico")',
+        'a:has-text("Processo Eletrônico")',
+        'button:has-text("Visualizador")',
+        'a:has-text("Visualizador")'
+      ], 5000);
+      if (opened) {
+        await page.waitForLoadState('domcontentloaded', { timeout: 30000 }).catch(() => {});
+        await page.waitForTimeout(2500);
+      }
+      return {
+        ok: true,
+        status: opened ? 'dcp-process-opened-teor-pending' : 'dcp-process-found-open-pending',
+        cnj: process.cnj,
+        cliente: process.cliente,
+        dashboardId: process.dashboardId,
+        tribunal: dcp.name,
+        found: true,
+        opened,
+        attempts,
+        url: page.url(),
+        title: await page.title(),
+        textSample: await getVisibleText(page)
+      };
+    }
+  }
+
+  return {
+    ok: false,
+    status: 'dcp-process-not-found',
+    reason: 'Processo nao foi localizado no Portal de Serviços/DCP com busca automatica por numero.',
+    cnj: process.cnj,
+    cliente: process.cliente,
+    dashboardId: process.dashboardId,
+    tribunal: dcp.name,
+    attempts,
+    fields: await collectSearchFieldDiagnostics(page),
+    navigation: await collectPjeNavigationDiagnostics(page),
+    url: page.url(),
+    title: await page.title(),
+    textSample: await getVisibleText(page)
+  };
+}
+
 function isEprocLoginOrExpired(url, title, text) {
   const haystack = `${url || ''}\n${title || ''}\n${text || ''}`;
   return /sess.*foi encerrada|entrar no sistema|usu.rio\s+senha|senha\s+visibility|esqueci minha senha|externo_controlador\.php\?acao=principal/i.test(haystack);
@@ -1435,32 +1633,31 @@ async function runTribunalProbes(report) {
       });
 
       if (loggedIn) {
-        let eprocBlocked = false;
+        let dcpBlocked = false;
         for (let index = 0; index < targets.length; index += 1) {
           const target = targets[index];
-          if (eprocBlocked) {
+          if (dcpBlocked) {
             probes.push({
               ok: false,
-              status: 'tribunal-check-skipped-after-eproc-blocker',
-              reason: 'O eproc ja bloqueou o acesso automatico ao teor nesta execucao; os demais processos ficam pendentes pelo mesmo bloqueio de ambiente.',
+              status: 'tribunal-check-skipped-after-dcp-blocker',
+              reason: 'O Portal de Serviços/DCP ja bloqueou o acesso automatico ao teor nesta execucao; os demais processos ficam pendentes pelo mesmo bloqueio de ambiente.',
               cnj: target.process.cnj,
               cliente: target.process.cliente,
-              tribunal: target.tribunal.eproc?.name || target.tribunal.name
+              tribunal: target.tribunal.dcp?.name || target.tribunal.name
             });
             continue;
           }
 
           const pjeResult = await searchPjeProcess(page, target.process);
           probes.push(pjeResult);
-          if (!pjeResult.ok && target.tribunal.eproc && !eprocBlocked) {
-            const eprocPage = await browser.newPage({ locale: 'pt-BR', timezoneId: 'America/Sao_Paulo' });
+          if (!pjeResult.ok && target.tribunal.dcp && !dcpBlocked) {
+            const dcpPage = await browser.newPage({ locale: 'pt-BR', timezoneId: 'America/Sao_Paulo' });
             try {
-              const eprocResult = await searchEprocProcess(eprocPage, target.process, target.tribunal.eproc);
-              probes.push(eprocResult);
-              eprocBlocked = /eproc-login-(not-complete|blocked)|captcha|turnstile/i.test(`${eprocResult.status || ''} ${eprocResult.reason || ''}`)
-                || (eprocResult.diagnostics || []).some((field) => /cf-turnstile-response|hdnInfraCaptcha/i.test(`${field.id || ''} ${field.name || ''}`));
+              const dcpResult = await searchDcpProcess(dcpPage, target.process, target.tribunal.dcp);
+              probes.push(dcpResult);
+              dcpBlocked = /dcp-(email-code-required|login-rejected|login-not-complete|login-fields-not-found|secrets-missing)/i.test(`${dcpResult.status || ''} ${dcpResult.reason || ''}`);
             } finally {
-              await eprocPage.close().catch(() => {});
+              await dcpPage.close().catch(() => {});
             }
           }
         }
@@ -1480,12 +1677,12 @@ async function runTribunalProbes(report) {
 
     const processOpened = probes.some((probe) => /process-opened/.test(probe.status || ''));
     const processFound = probes.some((probe) => /process-(opened|found)/.test(probe.status || ''));
-    const eprocCaptcha = probes.some((probe) => (probe.diagnostics || []).some((field) => /cf-turnstile-response|hdnInfraCaptcha/i.test(`${field.id || ''} ${field.name || ''}`)));
-    const tribunalLoggedIn = probes.some((probe) => probe.status === 'tribunal-password-login-complete' || probe.status === 'eproc-login-complete');
+    const dcpBlocked = probes.some((probe) => /^dcp-(email-code-required|login-rejected|login-not-complete|login-fields-not-found|secrets-missing)/.test(probe.status || ''));
+    const tribunalLoggedIn = probes.some((probe) => probe.status === 'tribunal-password-login-complete' || probe.status === 'dcp-login-complete');
     return {
       ok: processFound,
-      status: processOpened ? 'tribunal-processes-opened-teor-pending' : (eprocCaptcha ? 'eproc-login-blocked-by-cloudflare-captcha' : (tribunalLoggedIn ? 'tribunal-login-complete-search-pending' : 'tribunal-login-blocked')),
-      reason: eprocCaptcha ? 'O TJRJ eproc exibiu Cloudflare Turnstile/captcha no runner do GitHub Actions, impedindo login automatico com CPF/senha.' : undefined,
+      status: processOpened ? 'tribunal-processes-opened-teor-pending' : (dcpBlocked ? 'dcp-login-blocked-or-incomplete' : (tribunalLoggedIn ? 'tribunal-login-complete-search-pending' : 'tribunal-login-blocked')),
+      reason: dcpBlocked ? 'O PJe nao localizou o processo e o Portal de Serviços/DCP nao concluiu acesso automatico ao teor no runner.' : undefined,
       probes
     };
   } finally {

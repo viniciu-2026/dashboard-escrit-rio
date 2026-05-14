@@ -95,6 +95,8 @@ Cadastre os Secrets abaixo em `Settings > Secrets and variables > Actions` antes
 
 - `GOVBR_CPF`
 - `GOVBR_PASSWORD`
+- `TRIBUNAL_CPF` e `TRIBUNAL_PASSWORD` para PJe/TJRJ
+- `DCP_CPF` e `DCP_PASSWORD` para o Portal de Serviços/DCP do TJRJ; enquanto esses nomes nao existirem, o runner aceita as credenciais equivalentes ja cadastradas em `EPROC_CPF` e `EPROC_PASSWORD`
 - `FIREBASE_DATABASE_AUTH_TOKEN` ou `FIREBASE_SERVICE_ACCOUNT_JSON`
 - `GMAIL_OAUTH_JSON`, ou o trio `GMAIL_REFRESH_TOKEN`, `GMAIL_CLIENT_ID` e `GMAIL_CLIENT_SECRET`, para a etapa obrigatoria de pushes por e-mail
 

@@ -24,6 +24,8 @@ jobs:
       TRIBUNAL_PASSWORD: ${{ secrets.TRIBUNAL_PASSWORD }}
       PJE_CPF: ${{ secrets.PJE_CPF }}
       PJE_PASSWORD: ${{ secrets.PJE_PASSWORD }}
+      DCP_CPF: ${{ secrets.DCP_CPF }}
+      DCP_PASSWORD: ${{ secrets.DCP_PASSWORD }}
       EPROC_CPF: ${{ secrets.EPROC_CPF }}
       EPROC_PASSWORD: ${{ secrets.EPROC_PASSWORD }}
       JF_CPF: ${{ secrets.JF_CPF }}
