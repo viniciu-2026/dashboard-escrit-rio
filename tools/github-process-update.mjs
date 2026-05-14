@@ -392,6 +392,15 @@ async function getVisibleTextSample(page) {
   }
 }
 
+async function getVisibleText(page, limit = 2000) {
+  try {
+    const text = await page.locator('body').innerText({ timeout: 5000 });
+    return text.replace(/\s+/g, ' ').trim().slice(0, limit);
+  } catch {
+    return '';
+  }
+}
+
 function classifyGovbrBlock(textSample) {
   const text = String(textSample || '');
   if (/403\s+Forbidden|Request forbidden by administrative rules/i.test(text)) {
@@ -766,6 +775,49 @@ async function collectSearchFieldDiagnostics(page) {
   }
 }
 
+async function collectPjeNavigationDiagnostics(page) {
+  try {
+    return await page.locator('a, button, input[type="submit"], input[type="button"]').evaluateAll((elements) => elements.slice(0, 120).map((element) => ({
+      tag: element.tagName.toLowerCase(),
+      id: element.getAttribute('id') || '',
+      name: element.getAttribute('name') || '',
+      href: element.getAttribute('href') || '',
+      value: element.getAttribute('value') || '',
+      title: element.getAttribute('title') || '',
+      ariaLabel: element.getAttribute('aria-label') || '',
+      text: (element.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 120)
+    })));
+  } catch {
+    return [];
+  }
+}
+
+function pageTextHasCnj(text, cnj) {
+  const digits = String(cnj || '').replace(/[^\d]/g, '');
+  return String(text || '').includes(cnj) || (digits && String(text || '').includes(digits));
+}
+
+async function openPjeResultIfVisible(page, process) {
+  const escapedCnj = process.cnj.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const opened = await clickFirstVisible(page, [
+    page.getByRole('link', { name: new RegExp(escapedCnj) }),
+    `a:has-text("${process.cnj}")`,
+    'a[title*="Detalhe"]',
+    'a[title*="detalhe"]',
+    'a[title*="Visualizar"]',
+    'a[title*="visualizar"]',
+    'a[title*="Abrir"]',
+    'a[title*="abrir"]',
+    'a:has(i)'
+  ], 5000);
+
+  if (opened) {
+    await page.waitForLoadState('domcontentloaded', { timeout: 30000 }).catch(() => {});
+    await page.waitForTimeout(2000);
+  }
+  return opened;
+}
+
 async function tryPjeFreeSearch(page, process) {
   await gotoPjeProcessSearch(page);
 
@@ -802,6 +854,108 @@ async function tryPjeFreeSearch(page, process) {
     url: page.url(),
     title: await page.title(),
     textSample
+  };
+}
+
+async function tryPjeAdvogadoPanelSearch(page, process) {
+  const digits = process.cnj.replace(/[^\d]/g, '');
+  const candidates = [
+    'https://tjrj.pje.jus.br/1g/Painel/painel_usuario/advogado.seam',
+    'https://tjrj.pje.jus.br/1g/Processo/ConsultaProcesso/listView.seam',
+    'https://tjrj.pje.jus.br/pje/Painel/painel_usuario/advogado.seam',
+    'https://tjrj.pje.jus.br/pje/Processo/ConsultaProcesso/listView.seam'
+  ];
+  const attempts = [];
+
+  for (const url of candidates) {
+    try {
+      await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
+      await page.waitForTimeout(2500);
+      let text = await getVisibleText(page);
+      if (/loginOld\.seam|Identifique-se|Acesse sua conta/i.test(page.url()) || /usu[aá]rio|senha/i.test(text)) {
+        attempts.push({ url, status: 'login-required', title: await page.title(), textSample: text.slice(0, 700) });
+        continue;
+      }
+
+      if (pageTextHasCnj(text, process.cnj)) {
+        const opened = await openPjeResultIfVisible(page, process);
+        return {
+          ok: true,
+          status: opened ? 'pje-process-opened-from-panel-teor-pending' : 'pje-process-found-in-panel-open-pending',
+          found: true,
+          opened,
+          url: page.url(),
+          title: await page.title(),
+          textSample: await getVisibleText(page)
+        };
+      }
+
+      for (const value of [process.cnj, digits]) {
+        const filled = await fillFirstCandidate(page, [
+          page.getByLabel(/processo|pesquisar|buscar|filtro|consulta/i),
+          'input[id*="processo" i]',
+          'input[name*="processo" i]',
+          'input[id*="numero" i]',
+          'input[name*="numero" i]',
+          'input[id*="filtro" i]',
+          'input[name*="filtro" i]',
+          'input[id*="pesquisa" i]',
+          'input[name*="pesquisa" i]',
+          'input[id*="search" i]',
+          'input[name*="search" i]',
+          'input[type="search"]',
+          'input[type="text"]'
+        ], value, 5000);
+
+        if (!filled) {
+          attempts.push({ url: page.url(), valueKind: value === process.cnj ? 'formatted' : 'digits', status: 'search-input-not-found', title: await page.title(), textSample: text.slice(0, 700) });
+          continue;
+        }
+
+        await clickFirstVisible(page, [
+          page.getByRole('button', { name: /pesquisar|buscar|filtrar|consultar/i }),
+          'button:has-text("Pesquisar")',
+          'button:has-text("Buscar")',
+          'button:has-text("Filtrar")',
+          'input[type="submit"][value*="Pesquisar"]',
+          'input[type="button"][value*="Pesquisar"]',
+          'input[type="submit"]'
+        ], 5000);
+        await page.keyboard.press('Enter').catch(() => {});
+        await page.waitForLoadState('domcontentloaded', { timeout: 30000 }).catch(() => {});
+        await page.waitForTimeout(4000);
+
+        text = await getVisibleText(page);
+        const found = pageTextHasCnj(text, process.cnj);
+        attempts.push({ url: page.url(), valueKind: value === process.cnj ? 'formatted' : 'digits', status: found ? 'found' : 'not-found', title: await page.title(), textSample: text.slice(0, 700) });
+        if (found) {
+          const opened = await openPjeResultIfVisible(page, process);
+          return {
+            ok: true,
+            status: opened ? 'pje-process-opened-from-panel-search-teor-pending' : 'pje-process-found-in-panel-search-open-pending',
+            found: true,
+            opened,
+            url: page.url(),
+            title: await page.title(),
+            textSample: await getVisibleText(page),
+            attempts
+          };
+        }
+      }
+    } catch (error) {
+      attempts.push({ url, status: 'exception', error: String(error.message || error) });
+    }
+  }
+
+  return {
+    ok: false,
+    status: 'pje-process-not-found-panel-search',
+    attempts,
+    fields: await collectSearchFieldDiagnostics(page),
+    navigation: await collectPjeNavigationDiagnostics(page),
+    url: page.url(),
+    title: await page.title(),
+    textSample: await getVisibleText(page)
   };
 }
 
@@ -929,23 +1083,53 @@ async function searchPjeProcess(page, process) {
   await clickPjeSearchButton(page);
 
   const textSample = await getVisibleTextSample(page);
-  const found = textSample.includes(process.cnj) || textSample.includes(process.cnj.replace(/[^\d]/g, ''));
+  const found = pageTextHasCnj(textSample, process.cnj);
 
   let opened = false;
   if (found) {
-    opened = await clickFirstVisible(page, [
-      page.getByRole('link', { name: new RegExp(process.cnj.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')) }),
-      `a:has-text("${process.cnj}")`,
-      'a[title*="Detalhe"]',
-      'a[title*="detalhe"]',
-      'a[title*="Visualizar"]',
-      'a[title*="visualizar"]',
-      'a:has(i)'
-    ], 5000);
-    if (opened) {
-      await page.waitForLoadState('domcontentloaded', { timeout: 30000 }).catch(() => {});
-      await page.waitForTimeout(2000);
+    opened = await openPjeResultIfVisible(page, process);
+  }
+
+  if (!found) {
+    const panelSearch = await tryPjeAdvogadoPanelSearch(page, process);
+    if (panelSearch.ok) {
+      return {
+        ok: true,
+        status: panelSearch.status,
+        cnj: process.cnj,
+        cliente: process.cliente,
+        dashboardId: process.dashboardId,
+        found: true,
+        opened: panelSearch.opened,
+        url: panelSearch.url,
+        title: panelSearch.title,
+        textSample: panelSearch.textSample,
+        panelSearch: {
+          attempts: panelSearch.attempts
+        }
+      };
     }
+
+    const fields = await collectSearchFieldDiagnostics(page);
+    const navigation = await collectPjeNavigationDiagnostics(page);
+    return {
+      ok: false,
+      status: 'pje-process-not-found',
+      cnj: process.cnj,
+      cliente: process.cliente,
+      dashboardId: process.dashboardId,
+      found: false,
+      opened: false,
+      url: page.url(),
+      title: await page.title(),
+      textSample: await getVisibleText(page),
+      fields,
+      navigation,
+      panelSearch: {
+        status: panelSearch.status,
+        attempts: panelSearch.attempts
+      }
+    };
   }
 
   const detailText = opened ? await getVisibleTextSample(page) : textSample;
@@ -1242,16 +1426,29 @@ async function runTribunalProbes(report) {
       });
 
       if (loggedIn) {
+        let eprocBlocked = false;
         for (const target of targets) {
           const pjeResult = await searchPjeProcess(page, target.process);
           probes.push(pjeResult);
-          if (!pjeResult.ok && target.tribunal.eproc) {
+          if (!pjeResult.ok && target.tribunal.eproc && !eprocBlocked) {
             const eprocPage = await browser.newPage({ locale: 'pt-BR', timezoneId: 'America/Sao_Paulo' });
             try {
-              probes.push(await searchEprocProcess(eprocPage, target.process, target.tribunal.eproc));
+              const eprocResult = await searchEprocProcess(eprocPage, target.process, target.tribunal.eproc);
+              probes.push(eprocResult);
+              eprocBlocked = /eproc-login-(not-complete|blocked)|captcha|turnstile/i.test(`${eprocResult.status || ''} ${eprocResult.reason || ''}`)
+                || (eprocResult.diagnostics || []).some((field) => /cf-turnstile-response|hdnInfraCaptcha/i.test(`${field.id || ''} ${field.name || ''}`));
             } finally {
               await eprocPage.close().catch(() => {});
             }
+          } else if (!pjeResult.ok && target.tribunal.eproc && eprocBlocked) {
+            probes.push({
+              ok: false,
+              status: 'eproc-skipped-after-login-blocker',
+              reason: 'eproc ja bloqueou login automatico nesta execucao; evitando repetir tentativas identicas para os demais processos.',
+              cnj: target.process.cnj,
+              cliente: target.process.cliente,
+              tribunal: target.tribunal.eproc.name
+            });
           }
         }
       }
