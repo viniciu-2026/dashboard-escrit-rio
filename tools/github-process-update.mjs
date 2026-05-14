@@ -686,6 +686,84 @@ async function fillPjeSegment(page, selectors, value) {
   return false;
 }
 
+async function fillFirstCandidate(page, candidates, value, timeout = 3000) {
+  for (const candidate of candidates) {
+    try {
+      const locator = typeof candidate === 'string' ? page.locator(candidate).first() : candidate.first();
+      await locator.waitFor({ state: 'visible', timeout });
+      await locator.fill(value);
+      return true;
+    } catch {
+      // Try next candidate.
+    }
+  }
+  return false;
+}
+
+async function collectSearchFieldDiagnostics(page) {
+  try {
+    return await page.locator('input, select, textarea, button').evaluateAll((elements) => elements.slice(0, 80).map((element) => ({
+      tag: element.tagName.toLowerCase(),
+      type: element.getAttribute('type') || '',
+      id: element.getAttribute('id') || '',
+      name: element.getAttribute('name') || '',
+      value: element.tagName.toLowerCase() === 'button' ? (element.textContent || '').trim().slice(0, 80) : '',
+      placeholder: element.getAttribute('placeholder') || '',
+      title: element.getAttribute('title') || '',
+      ariaLabel: element.getAttribute('aria-label') || ''
+    })));
+  } catch {
+    return [];
+  }
+}
+
+async function tryPjeFreeSearch(page, process) {
+  await gotoPjeProcessSearch(page);
+
+  await clickFirstVisible(page, [
+    page.getByText(/^Livre$/i),
+    page.getByLabel(/Livre/i),
+    'label:has-text("Livre")',
+    'input[value*="LIVRE"]',
+    'input[value*="Livre"]'
+  ], 3000);
+
+  const filled = await fillFirstCandidate(page, [
+    page.getByLabel(/n[uú]mero do processo/i),
+    page.getByLabel(/processo refer[eê]ncia/i),
+    page.getByLabel(/numera[cç][aã]o [uú]nica/i),
+    'input[id*="numeroProcesso"][type="text"]',
+    'input[id*="NumeroProcesso"][type="text"]',
+    'input[id*="processoReferencia"][type="text"]',
+    'input[id*="ProcessoReferencia"][type="text"]',
+    'input[name*="numeroProcesso"][type="text"]',
+    'input[name*="processoReferencia"][type="text"]'
+  ], process.cnj, 5000);
+
+  if (!filled) return { ok: false, status: 'pje-free-search-field-not-found' };
+
+  await clickFirstVisible(page, [
+    'input[id*="searchProcessos"]',
+    'button[id*="searchProcessos"]',
+    'input[value*="Pesquisar"]',
+    'button:has-text("Pesquisar")',
+    page.getByRole('button', { name: /pesquisar|consultar/i })
+  ], 8000);
+  await page.waitForLoadState('domcontentloaded', { timeout: 30000 }).catch(() => {});
+  await page.waitForTimeout(3000);
+
+  const textSample = await getVisibleTextSample(page);
+  const found = textSample.includes(process.cnj) || textSample.includes(process.cnj.replace(/[^\d]/g, ''));
+  return {
+    ok: found,
+    status: found ? 'pje-process-found-free-search' : 'pje-process-not-found-free-search',
+    found,
+    url: page.url(),
+    title: await page.title(),
+    textSample
+  };
+}
+
 async function searchPjeProcess(page, process) {
   const parts = splitCnj(process.cnj);
   if (!parts) {
@@ -742,6 +820,22 @@ async function searchPjeProcess(page, process) {
   };
 
   if (!Object.values(fills).every(Boolean)) {
+    const freeSearch = await tryPjeFreeSearch(page, process);
+    if (freeSearch.ok) {
+      return {
+        ok: true,
+        status: 'pje-process-found-free-search-open-pending',
+        cnj: process.cnj,
+        cliente: process.cliente,
+        dashboardId: process.dashboardId,
+        found: true,
+        opened: false,
+        url: freeSearch.url,
+        title: freeSearch.title,
+        textSample: freeSearch.textSample
+      };
+    }
+
     return {
       ok: false,
       status: 'pje-search-fields-not-found',
@@ -749,6 +843,11 @@ async function searchPjeProcess(page, process) {
       cliente: process.cliente,
       reason: 'Nao encontrei todos os campos segmentados de numero CNJ na tela de consulta do PJe.',
       fills,
+      freeSearch: {
+        ok: freeSearch.ok,
+        status: freeSearch.status
+      },
+      fields: await collectSearchFieldDiagnostics(page),
       url: page.url(),
       title: await page.title(),
       textSample: await getVisibleTextSample(page)
