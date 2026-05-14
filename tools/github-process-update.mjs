@@ -289,6 +289,42 @@ async function fillFirstVisible(page, candidates, value, timeout = 5000) {
   return false;
 }
 
+async function fillInputWithEvents(locator, value) {
+  await locator.click();
+  await locator.fill('');
+  await locator.type(value, { delay: 20 });
+  await locator.evaluate((element, currentValue) => {
+    element.value = currentValue;
+    element.dispatchEvent(new Event('input', { bubbles: true }));
+    element.dispatchEvent(new Event('change', { bubbles: true }));
+  }, value);
+  return locator.evaluate((element) => String(element.value || '').length);
+}
+
+async function fillGovbrCpf(page, value, timeout = 15000) {
+  const selectors = [
+    '#accountId',
+    'input[name="accountId"]',
+    'input[name="login"]',
+    'input[name="username"]',
+    'input[type="tel"]',
+    'input[type="text"]'
+  ];
+
+  for (const selector of selectors) {
+    try {
+      const locator = page.locator(selector).first();
+      await locator.waitFor({ state: 'visible', timeout });
+      const valueLength = await fillInputWithEvents(locator, value);
+      return { ok: true, selector, valueLength };
+    } catch {
+      // Try the next selector.
+    }
+  }
+
+  return { ok: false, valueLength: 0 };
+}
+
 async function submitGovbrCpf(page) {
   await page.waitForTimeout(500);
   const clicked = await clickFirstVisible(page, [
@@ -305,7 +341,7 @@ async function submitGovbrCpf(page) {
   }
   await page.waitForLoadState('domcontentloaded', { timeout: 30000 }).catch(() => {});
   await page.waitForTimeout(2500);
-  return clicked;
+  return { clicked };
 }
 
 async function getVisibleTextSample(page) {
@@ -395,16 +431,9 @@ async function runJusbrGovLogin(report) {
     const afterPortalGovClickBlock = await detectGovbrBlock(page, 'jusbr-portal-gov');
     if (afterPortalGovClickBlock) return afterPortalGovClickBlock;
 
-    const cpfFilled = await fillFirstVisible(page, [
-      '#accountId',
-      'input[name="accountId"]',
-      'input[name="login"]',
-      'input[name="username"]',
-      'input[type="tel"]',
-      'input[type="text"]'
-    ], loginCpf, 15000);
+    const cpfFilled = await fillGovbrCpf(page, loginCpf, 15000);
 
-    if (!cpfFilled) {
+    if (!cpfFilled.ok) {
       return {
         ok: false,
         status: 'blocked',
@@ -416,7 +445,7 @@ async function runJusbrGovLogin(report) {
       };
     }
 
-    await submitGovbrCpf(page);
+    const cpfSubmit = await submitGovbrCpf(page);
 
     const afterCpfBlock = await detectGovbrBlock(page, 'govbr-after-cpf');
     if (afterCpfBlock) return afterCpfBlock;
@@ -435,6 +464,11 @@ async function runJusbrGovLogin(report) {
         reason: 'Nao encontrei o campo de senha apos informar CPF. Pode haver captcha, 2FA, conta bloqueada ou mudanca de fluxo.',
         url: page.url(),
         title: await page.title(),
+        cpfField: {
+          selector: cpfFilled.selector,
+          valueLength: cpfFilled.valueLength,
+          submitClicked: cpfSubmit.clicked
+        },
         textSample: await getVisibleTextSample(page)
       };
     }
