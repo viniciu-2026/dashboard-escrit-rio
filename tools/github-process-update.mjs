@@ -576,7 +576,13 @@ function tribunalTargetForCnj(cnj) {
       name: 'TJRJ PJe 1g',
       url: 'https://tjrj.pje.jus.br/1g/loginOld.seam',
       loginUser: secretValue('TRIBUNAL_CPF'),
-      loginPassword: secretValue('TRIBUNAL_PASSWORD')
+      loginPassword: secretValue('TRIBUNAL_PASSWORD'),
+      eproc: {
+        name: 'TJRJ eproc 1g',
+        url: 'https://eproc1g.tjrj.jus.br/eproc/',
+        loginUser: secretValue('EPROC_CPF'),
+        loginPassword: secretValue('EPROC_PASSWORD')
+      }
     };
   }
   return null;
@@ -957,6 +963,128 @@ async function searchPjeProcess(page, process) {
   };
 }
 
+async function tryEprocLogin(page, eproc) {
+  if (!eproc?.loginUser || !eproc?.loginPassword) {
+    return {
+      ok: false,
+      status: 'eproc-secrets-missing',
+      reason: 'Faltam Secrets EPROC_CPF/EPROC_PASSWORD.'
+    };
+  }
+
+  await page.goto(eproc.url, { waitUntil: 'domcontentloaded', timeout: 30000 });
+  await page.waitForTimeout(1500);
+
+  const userFilled = await fillFirstCandidate(page, [
+    '#txtUsuario',
+    'input[name="txtUsuario"]',
+    'input[id*="Usuario"]',
+    'input[name*="Usuario"]',
+    'input[type="text"]'
+  ], eproc.loginUser, 8000);
+
+  const passwordFilled = await fillFirstCandidate(page, [
+    '#pwdSenha',
+    'input[name="pwdSenha"]',
+    'input[id*="Senha"]',
+    'input[name*="Senha"]',
+    'input[type="password"]'
+  ], eproc.loginPassword, 8000);
+
+  if (!userFilled || !passwordFilled) {
+    return {
+      ok: false,
+      status: 'eproc-login-fields-not-found',
+      reason: 'Nao encontrei campos de usuario/senha no eproc.',
+      url: page.url(),
+      title: await page.title(),
+      textSample: await getVisibleTextSample(page)
+    };
+  }
+
+  await clickFirstVisible(page, [
+    '#sbmEntrar',
+    'button:has-text("Entrar")',
+    'input[type="submit"]',
+    'input[type="button"][value*="Entrar"]'
+  ], 8000);
+  await page.waitForLoadState('domcontentloaded', { timeout: 30000 }).catch(() => {});
+  await page.waitForTimeout(3000);
+
+  const textSample = await getVisibleTextSample(page);
+  const rejected = /senha inv[aá]lida|usu[aá]rio inv[aá]lido|inv[aá]lido|2fa|autentica[cç][aã]o|c[oó]digo|token/i.test(textSample);
+  return {
+    ok: !rejected && !/login|entrar/i.test(await page.title()),
+    status: rejected ? 'eproc-login-blocked' : 'eproc-login-complete',
+    reason: rejected ? 'eproc recusou login ou solicitou autenticacao adicional.' : undefined,
+    url: page.url(),
+    title: await page.title(),
+    textSample
+  };
+}
+
+async function searchEprocProcess(page, process, eproc) {
+  const login = await tryEprocLogin(page, eproc);
+  if (!login.ok) {
+    return {
+      ok: false,
+      status: login.status,
+      reason: login.reason,
+      cnj: process.cnj,
+      cliente: process.cliente,
+      tribunal: eproc?.name || 'eproc',
+      url: login.url,
+      title: login.title,
+      textSample: login.textSample
+    };
+  }
+
+  const digits = process.cnj.replace(/[^\d]/g, '');
+  const urls = [
+    `${eproc.url}controlador.php?acao=processo_selecionar&num_processo=${digits}`,
+    `${eproc.url}controlador.php?acao=processo_consulta&num_processo=${digits}`,
+    `${eproc.url}controlador.php?acao=processo_consulta&txtNumProcesso=${digits}`
+  ];
+
+  for (const url of urls) {
+    try {
+      await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
+      await page.waitForTimeout(2500);
+      const textSample = await getVisibleTextSample(page);
+      const found = textSample.includes(process.cnj) || textSample.includes(digits) || /evento|movimento|autos|processo/i.test(textSample);
+      if (found && !/n[aã]o encontrado|inexistente/i.test(textSample)) {
+        return {
+          ok: true,
+          status: 'eproc-process-opened-teor-pending',
+          cnj: process.cnj,
+          cliente: process.cliente,
+          dashboardId: process.dashboardId,
+          found,
+          opened: true,
+          tribunal: eproc.name,
+          url: page.url(),
+          title: await page.title(),
+          textSample
+        };
+      }
+    } catch {
+      // Try next eproc URL.
+    }
+  }
+
+  return {
+    ok: false,
+    status: 'eproc-process-not-found',
+    cnj: process.cnj,
+    cliente: process.cliente,
+    dashboardId: process.dashboardId,
+    tribunal: eproc.name,
+    url: page.url(),
+    title: await page.title(),
+    textSample: await getVisibleTextSample(page)
+  };
+}
+
 async function runTribunalProbes(report) {
   const processes = report.consolidated?.processes || [];
   const targets = processes
@@ -1029,7 +1157,16 @@ async function runTribunalProbes(report) {
 
       if (loggedIn) {
         for (const target of targets) {
-          probes.push(await searchPjeProcess(page, target.process));
+          const pjeResult = await searchPjeProcess(page, target.process);
+          probes.push(pjeResult);
+          if (!pjeResult.ok && target.tribunal.eproc) {
+            const eprocPage = await browser.newPage({ locale: 'pt-BR', timezoneId: 'America/Sao_Paulo' });
+            try {
+              probes.push(await searchEprocProcess(eprocPage, target.process, target.tribunal.eproc));
+            } finally {
+              await eprocPage.close().catch(() => {});
+            }
+          }
         }
       }
     } catch (error) {
@@ -1046,8 +1183,8 @@ async function runTribunalProbes(report) {
     }
 
     return {
-      ok: probes.some((probe) => /^pje-process-(opened|found)/.test(probe.status || '')),
-      status: probes.some((probe) => /^pje-process-opened/.test(probe.status || '')) ? 'pje-processes-opened-teor-pending' : (probes.some((probe) => probe.status === 'tribunal-password-login-complete') ? 'pje-login-complete-search-pending' : 'tribunal-login-blocked'),
+      ok: probes.some((probe) => /process-(opened|found)/.test(probe.status || '')),
+      status: probes.some((probe) => /process-opened/.test(probe.status || '')) ? 'tribunal-processes-opened-teor-pending' : (probes.some((probe) => probe.status === 'tribunal-password-login-complete' || probe.status === 'eproc-login-complete') ? 'tribunal-login-complete-search-pending' : 'tribunal-login-blocked'),
       probes
     };
   } finally {
