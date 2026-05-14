@@ -963,6 +963,19 @@ async function searchPjeProcess(page, process) {
   };
 }
 
+function isEprocLoginOrExpired(url, title, text) {
+  const haystack = `${url || ''}\n${title || ''}\n${text || ''}`;
+  return /sess.*foi encerrada|entrar no sistema|usu.rio\s+senha|senha\s+visibility|esqueci minha senha|externo_controlador\.php\?acao=principal/i.test(haystack);
+}
+
+function textLooksLikeEprocProcess(text, cnj, digits) {
+  if (!text) return false;
+  if (isEprocLoginOrExpired('', '', text)) return false;
+  if (/n.o encontrado|inexistente|nenhum registro|processo n.o localizado/i.test(text)) return false;
+  if (text.includes(cnj) || text.includes(digits)) return true;
+  return /eventos do processo|evento\s+data|movimenta..o|partes do processo|autos com/i.test(text);
+}
+
 async function tryEprocLogin(page, eproc) {
   if (!eproc?.loginUser || !eproc?.loginPassword) {
     return {
@@ -1012,13 +1025,15 @@ async function tryEprocLogin(page, eproc) {
   await page.waitForTimeout(3000);
 
   const textSample = await getVisibleTextSample(page);
+  const title = await page.title();
+  const loginPage = isEprocLoginOrExpired(page.url(), title, textSample);
   const rejected = /senha inv[aá]lida|usu[aá]rio inv[aá]lido|inv[aá]lido|2fa|autentica[cç][aã]o|c[oó]digo|token/i.test(textSample);
   return {
-    ok: !rejected && !/login|entrar/i.test(await page.title()),
-    status: rejected ? 'eproc-login-blocked' : 'eproc-login-complete',
-    reason: rejected ? 'eproc recusou login ou solicitou autenticacao adicional.' : undefined,
+    ok: !rejected && !loginPage,
+    status: rejected ? 'eproc-login-blocked' : (loginPage ? 'eproc-login-not-complete' : 'eproc-login-complete'),
+    reason: rejected ? 'eproc recusou login ou solicitou autenticacao adicional.' : (loginPage ? 'eproc permaneceu na tela de login ou encerrou a sessao apos envio das credenciais.' : undefined),
     url: page.url(),
-    title: await page.title(),
+    title,
     textSample
   };
 }
@@ -1051,7 +1066,8 @@ async function searchEprocProcess(page, process, eproc) {
       await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
       await page.waitForTimeout(2500);
       const textSample = await getVisibleTextSample(page);
-      const found = textSample.includes(process.cnj) || textSample.includes(digits) || /evento|movimento|autos|processo/i.test(textSample);
+      const found = textLooksLikeEprocProcess(textSample, process.cnj, digits);
+      if (!found) continue;
       if (found && !/n[aã]o encontrado|inexistente/i.test(textSample)) {
         return {
           ok: true,
@@ -1070,6 +1086,70 @@ async function searchEprocProcess(page, process, eproc) {
     } catch {
       // Try next eproc URL.
     }
+  }
+
+  try {
+    await page.goto(`${eproc.url}controlador.php?acao=processo_consulta`, { waitUntil: 'domcontentloaded', timeout: 30000 });
+    await page.waitForTimeout(1500);
+    const beforeSearchText = await getVisibleTextSample(page);
+    if (isEprocLoginOrExpired(page.url(), await page.title(), beforeSearchText)) {
+      return {
+        ok: false,
+        status: 'eproc-session-expired-before-search',
+        reason: 'A sessao do eproc encerrou antes da busca interna do processo.',
+        cnj: process.cnj,
+        cliente: process.cliente,
+        dashboardId: process.dashboardId,
+        tribunal: eproc.name,
+        url: page.url(),
+        title: await page.title(),
+        textSample: beforeSearchText
+      };
+    }
+
+    const formattedFilled = await fillFirstCandidate(page, [
+      '#txtNumProcesso',
+      'input[name="txtNumProcesso"]',
+      'input[id*="NumProcesso"]',
+      'input[name*="NumProcesso"]',
+      'input[placeholder*="processo" i]',
+      'input[type="text"]'
+    ], process.cnj, 8000);
+
+    if (formattedFilled) {
+      const clicked = await clickFirstVisible(page, [
+        '#sbmConsultar',
+        'button:has-text("Consultar")',
+        'input[type="submit"][value*="Consultar"]',
+        'input[type="button"][value*="Consultar"]',
+        'button:has-text("Pesquisar")',
+        'input[type="submit"]'
+      ], 8000);
+
+      if (!clicked) await page.keyboard.press('Enter').catch(() => {});
+      await page.waitForLoadState('domcontentloaded', { timeout: 30000 }).catch(() => {});
+      await page.waitForTimeout(2500);
+
+      const textSample = await getVisibleTextSample(page);
+      const found = textLooksLikeEprocProcess(textSample, process.cnj, digits);
+      if (found) {
+        return {
+          ok: true,
+          status: 'eproc-process-opened-teor-pending',
+          cnj: process.cnj,
+          cliente: process.cliente,
+          dashboardId: process.dashboardId,
+          found,
+          opened: true,
+          tribunal: eproc.name,
+          url: page.url(),
+          title: await page.title(),
+          textSample
+        };
+      }
+    }
+  } catch {
+    // Keep the final not-found report below with the current page state.
   }
 
   return {
