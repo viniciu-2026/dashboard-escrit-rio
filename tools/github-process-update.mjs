@@ -1104,7 +1104,17 @@ async function main() {
   }
 
   if (report.blockers.length === 0) {
-    report.jusbrLogin = await runJusbrGovLogin(report);
+    try {
+      report.jusbrLogin = await runJusbrGovLogin(report);
+    } catch (error) {
+      report.jusbrLogin = {
+        ok: false,
+        status: 'blocked',
+        stage: 'jusbr-exception',
+        reason: 'Jus.br falhou/expirou; seguindo para o tribunal conforme regra de fallback.',
+        error: String(error.message || error)
+      };
+    }
     if (!report.jusbrLogin.ok) {
       report.warnings.push(`Login Jus.br/GOV bloqueado; prosseguindo pelo tribunal conforme regra de fallback: ${report.jusbrLogin.reason || report.jusbrLogin.status}`);
     }
