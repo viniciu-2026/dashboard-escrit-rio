@@ -13,6 +13,8 @@ const reportDir = args.get('report-dir') || path.join(process.cwd(), 'automation
 const firebaseUrl = 'https://dashboard-vg-default-rtdb.firebaseio.com/dashboard/processes.json';
 const cnjPattern = /\b\d{7}-\d{2}\.\d{4}\.\d\.\d{2}\.\d{4}\b/g;
 const gmailListUrl = 'https://gmail.googleapis.com/gmail/v1/users/me/messages';
+const runMode = args.get('mode') || process.env.PROCESS_UPDATE_MODE || '';
+const discoveryOnly = /^(discovery|discovery-list|list|pending-list)$/i.test(runMode);
 
 function has(name) {
   return Boolean(process.env[name] && String(process.env[name]).trim());
@@ -1887,8 +1889,10 @@ async function main() {
   await mkdir(reportDir, { recursive: true });
 
   const missing = [];
-  for (const name of ['GOVBR_CPF', 'GOVBR_PASSWORD']) {
-    if (!has(name)) missing.push(name);
+  if (!discoveryOnly) {
+    for (const name of ['GOVBR_CPF', 'GOVBR_PASSWORD']) {
+      if (!has(name)) missing.push(name);
+    }
   }
 
   const report = {
@@ -1896,6 +1900,7 @@ async function main() {
     status: 'blocked',
     source: firebaseUrl,
     startedAt: new Date().toISOString(),
+    mode: discoveryOnly ? 'discovery-list' : 'full-remote-probe',
     environment: {
       githubActions: process.env.GITHUB_ACTIONS === 'true',
       hasGovbrCpf: has('GOVBR_CPF'),
@@ -1996,11 +2001,11 @@ async function main() {
     report.blockers.push('Falta configuracao de Gmail/pushes no runner; a descoberta por e-mail ficara incompleta.');
   }
 
-  if (!report.blockers.some((item) => item.startsWith('Secrets ausentes'))) {
+  if (!discoveryOnly && !report.blockers.some((item) => item.startsWith('Secrets ausentes'))) {
     await runBrowserSmoke(report);
   }
 
-  if (report.blockers.length === 0) {
+  if (!discoveryOnly && report.blockers.length === 0) {
     try {
       report.jusbrLogin = await runJusbrGovLogin(report);
     } catch (error) {
@@ -2017,7 +2022,7 @@ async function main() {
     }
   }
 
-  if (report.consolidated?.totalToVerifyInTribunals > 0) {
+  if (!discoveryOnly && report.consolidated?.totalToVerifyInTribunals > 0) {
     report.tribunalProbes = await runTribunalProbes(report);
     if (!report.tribunalProbes.ok) {
       report.blockers.push(`Nao foi possivel abrir os processos no tribunal para ler o teor: ${report.tribunalProbes.reason || report.tribunalProbes.status}`);
@@ -2026,9 +2031,21 @@ async function main() {
     }
   }
 
+  if (discoveryOnly) {
+    report.localNextStep = {
+      status: 'aguardando-atualizacao-local',
+      reason: 'Lista diaria montada no GitHub Actions. A leitura do teor deve ser feita localmente no computador do usuario, com certificado digital, quando ele pedir a atualizacao.',
+      instruction: 'Ao ligar o computador, pedir ao Codex: atualizar os processos da lista pendente da automacao processual.'
+    };
+  }
+
   report.finishedAt = new Date().toISOString();
-  report.ok = report.blockers.length === 0 && report.browser?.ok === true && report.gmail?.ok === true;
-  report.status = report.ok ? 'discovery-complete-teor-pendente' : 'blocked';
+  report.ok = discoveryOnly
+    ? report.blockers.length === 0 && report.gmail?.ok === true
+    : report.blockers.length === 0 && report.browser?.ok === true && report.gmail?.ok === true;
+  report.status = report.ok
+    ? (discoveryOnly ? 'pending-list-ready-for-local-update' : 'discovery-complete-teor-pendente')
+    : 'blocked';
 
   const consoleSummary = {
     ok: report.ok,
@@ -2075,6 +2092,28 @@ async function main() {
   };
 
   await writeFile(path.join(reportDir, 'github-process-update.json'), JSON.stringify(report, null, 2), 'utf8');
+  await writeFile(path.join(reportDir, 'pending-processes.json'), JSON.stringify({
+    status: report.status,
+    generatedAt: report.finishedAt,
+    period: {
+      from: report.maxVerificationPtBr,
+      to: report.todayPtBr
+    },
+    total: report.consolidated?.totalToVerifyInTribunals || 0,
+    processes: report.consolidated?.processes || [],
+    localNextStep: report.localNextStep || null
+  }, null, 2), 'utf8');
+  await writeFile(path.join(reportDir, 'pending-processes.md'), [
+    '# Processos pendentes de atualizacao',
+    '',
+    `Gerado em: ${report.finishedAt}`,
+    `Periodo: ${report.maxVerificationPtBr || '-'} a ${report.todayPtBr || '-'}`,
+    `Total: ${report.consolidated?.totalToVerifyInTribunals || 0}`,
+    '',
+    ...(report.consolidated?.processes || []).map((process, index) => `${index + 1}. ${process.cnj} - ${process.cliente || 'sem cliente no dashboard'} - sistema: ${process.dashboardSystem || 'nao identificado'} - origem: ${(process.origins || []).join(', ') || '-'}`),
+    '',
+    'Proxima etapa local: abrir estes processos no computador do usuario, com certificado digital, ler o teor no tribunal respectivo e so entao atualizar o dashboard.'
+  ].join('\n'), 'utf8');
   console.log(JSON.stringify(consoleSummary, null, 2));
 
   process.exit(report.ok ? 0 : 2);
