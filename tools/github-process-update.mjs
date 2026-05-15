@@ -1677,7 +1677,8 @@ async function runTribunalProbes(report) {
         textSample
       });
 
-      if (loggedIn) {
+      // If PJe blocks login, still test DCP where it is a valid fallback.
+      if (loggedIn || passwordLogin?.status === 'tribunal-password-login-not-confirmed' || govBlock) {
         let dcpBlocked = false;
         for (let index = 0; index < targets.length; index += 1) {
           const target = targets[index];
