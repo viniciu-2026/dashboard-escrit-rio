@@ -108,6 +108,23 @@ function uniqueCnjsFromText(text) {
   return [...seen];
 }
 
+function extractDashboardSystemHint(process) {
+  const text = [
+    process?.proc,
+    process?.res,
+    process?.prox,
+    process?.sistema,
+    process?.system,
+    process?.obs,
+    process?.tipo
+  ].map((value) => String(value || '')).join(' ');
+  const normalized = text.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase();
+  if (/\bpje\b|processo judicial eletronico/.test(normalized)) return { system: 'pje', source: 'dashboard-text' };
+  if (/\bdcp\b|portal de servicos|portal servicos|idserverjus/.test(normalized)) return { system: 'dcp', source: 'dashboard-text' };
+  if (/no sistema|\bsistema\b/.test(normalized)) return { system: 'no-sistema', source: 'dashboard-text' };
+  return { system: '', source: '' };
+}
+
 function urlsFromText(text) {
   const seen = new Set();
   for (const match of String(text || '').matchAll(/https?:\/\/[^\s"'<>]+/gi)) {
@@ -223,6 +240,8 @@ async function discoverGmailPushes({ fromPtBr, dashboardByCnj }) {
           knownInDashboard: dashboardByCnj.has(cnj),
           dashboardId: dashboardByCnj.get(cnj)?.id || '',
           cliente: dashboardByCnj.get(cnj)?.cl || '',
+          dashboardSystem: dashboardByCnj.get(cnj)?.dashboardSystem || '',
+          dashboardSystemSource: dashboardByCnj.get(cnj)?.dashboardSystemSource || '',
           messageCount: 0,
           candidateLinks: [],
           messages: []
@@ -595,6 +614,13 @@ function tribunalTargetForCnj(cnj) {
     };
   }
   return null;
+}
+
+function tribunalSearchOrder(process) {
+  const hint = String(process?.dashboardSystem || '').toLowerCase();
+  if (hint === 'dcp') return ['dcp', 'pje'];
+  if (hint === 'pje') return ['pje', 'dcp'];
+  return ['pje', 'dcp'];
 }
 
 function splitCnj(cnj) {
@@ -1667,16 +1693,35 @@ async function runTribunalProbes(report) {
             continue;
           }
 
-          const pjeResult = await searchPjeProcess(page, target.process);
-          probes.push(pjeResult);
-          if (!pjeResult.ok && target.tribunal.dcp && !dcpBlocked) {
-            const dcpPage = await browser.newPage({ locale: 'pt-BR', timezoneId: 'America/Sao_Paulo' });
-            try {
-              const dcpResult = await searchDcpProcess(dcpPage, target.process, target.tribunal.dcp);
-              probes.push(dcpResult);
-              dcpBlocked = /dcp-(email-code-required|login-rejected|login-not-complete|login-fields-not-found|secrets-missing)/i.test(`${dcpResult.status || ''} ${dcpResult.reason || ''}`);
-            } finally {
-              await dcpPage.close().catch(() => {});
+          const order = tribunalSearchOrder(target.process);
+          let foundInPreferredSystem = false;
+          for (const system of order) {
+            if (system === 'pje') {
+              const pjeResult = await searchPjeProcess(page, target.process);
+              probes.push({
+                ...pjeResult,
+                dashboardSystem: target.process.dashboardSystem || '',
+                dashboardSystemSource: target.process.dashboardSystemSource || ''
+              });
+              foundInPreferredSystem = pjeResult.ok;
+              if (foundInPreferredSystem) break;
+            }
+
+            if (system === 'dcp' && target.tribunal.dcp && !dcpBlocked) {
+              const dcpPage = await browser.newPage({ locale: 'pt-BR', timezoneId: 'America/Sao_Paulo' });
+              try {
+                const dcpResult = await searchDcpProcess(dcpPage, target.process, target.tribunal.dcp);
+                probes.push({
+                  ...dcpResult,
+                  dashboardSystem: target.process.dashboardSystem || '',
+                  dashboardSystemSource: target.process.dashboardSystemSource || ''
+                });
+                foundInPreferredSystem = dcpResult.ok;
+                dcpBlocked = /dcp-(email-code-required|login-rejected|login-not-complete|login-fields-not-found|secrets-missing)/i.test(`${dcpResult.status || ''} ${dcpResult.reason || ''}`);
+                if (foundInPreferredSystem || dcpBlocked) break;
+              } finally {
+                await dcpPage.close().catch(() => {});
+              }
             }
           }
         }
@@ -1753,13 +1798,21 @@ async function main() {
       const text = String(process.proc || '');
       for (const match of text.matchAll(cnjPattern)) {
         if (!match[0].includes('.5.')) {
-          dashboardByCnj.set(match[0], process);
+          const systemHint = extractDashboardSystemHint(process);
+          const enrichedProcess = {
+            ...process,
+            dashboardSystem: systemHint.system,
+            dashboardSystemSource: systemHint.source
+          };
+          dashboardByCnj.set(match[0], enrichedProcess);
           eligible.push({
             id: String(process.id || ''),
             cliente: String(process.cl || ''),
             tipo: String(process.tipo || ''),
             cnj: match[0],
-            ver: verification
+            ver: verification,
+            dashboardSystem: systemHint.system,
+            dashboardSystemSource: systemHint.source
           });
         }
       }
@@ -1793,6 +1846,8 @@ async function main() {
         knownInDashboard: item.knownInDashboard,
         dashboardId: item.dashboardId,
         cliente: item.cliente,
+        dashboardSystem: item.dashboardSystem || '',
+        dashboardSystemSource: item.dashboardSystemSource || '',
         messageCount: item.messageCount,
         candidateLinks: item.candidateLinks || []
       })) : []
