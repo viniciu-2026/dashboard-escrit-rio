@@ -181,6 +181,110 @@ async function gmailGet(accessToken, url) {
   return data;
 }
 
+function extractAuthenticationCode(text) {
+  const source = String(text || '');
+  const patterns = [
+    /c[oó]digo(?:\s+de)?(?:\s+autentica[cç][aã]o|\s+acesso|\s+seguran[cç]a)?\D{0,80}(\d{4,8})/gi,
+    /(\d{4,8})\D{0,80}c[oó]digo(?:\s+de)?(?:\s+autentica[cç][aã]o|\s+acesso|\s+seguran[cç]a)?/gi,
+    /token\D{0,80}(\d{4,8})/gi
+  ];
+
+  for (const pattern of patterns) {
+    const match = pattern.exec(source);
+    if (match?.[1]) return match[1];
+  }
+
+  return '';
+}
+
+async function findRecentDcpEmailCode() {
+  const accessToken = await getGmailAccessToken();
+  if (!accessToken) {
+    return { ok: false, status: 'gmail-oauth-missing', reason: 'GMAIL_OAUTH_JSON ausente para buscar codigo DCP.' };
+  }
+
+  const query = 'newer_than:15m (TJRJ OR IdServerJus OR "Portal de Serviços" OR "Portal de Servicos" OR "código de autenticação" OR "codigo de autenticacao" OR "duplo fator")';
+  const listUrl = new URL(gmailListUrl);
+  listUrl.searchParams.set('q', query);
+  listUrl.searchParams.set('maxResults', '10');
+
+  const list = await gmailGet(accessToken, listUrl);
+  for (const message of list.messages || []) {
+    const detailUrl = `${gmailListUrl}/${encodeURIComponent(message.id)}?format=full`;
+    const detail = await gmailGet(accessToken, detailUrl);
+    const headers = detail.payload?.headers || [];
+    const searchable = [
+      getHeader(headers, 'Subject'),
+      getHeader(headers, 'From'),
+      getHeader(headers, 'Date'),
+      detail.snippet || '',
+      ...collectMessageText(detail.payload)
+    ].join('\n');
+    const code = extractAuthenticationCode(searchable);
+    if (code) {
+      return {
+        ok: true,
+        status: 'dcp-email-code-found',
+        code,
+        messageId: detail.id,
+        subject: getHeader(headers, 'Subject'),
+        from: getHeader(headers, 'From')
+      };
+    }
+  }
+
+  return { ok: false, status: 'dcp-email-code-not-found', reason: 'Nenhum codigo DCP recente foi localizado no Gmail.' };
+}
+
+async function submitDcpEmailCode(page) {
+  for (let attempt = 0; attempt < 6; attempt += 1) {
+    if (attempt) await page.waitForTimeout(10000);
+    const codeResult = await findRecentDcpEmailCode();
+    if (!codeResult.ok) continue;
+
+    const codeFilled = await fillFirstCandidate(page, [
+      'input[autocomplete="one-time-code"]',
+      'input[id*="codigo" i]',
+      'input[name*="codigo" i]',
+      'input[placeholder*="codigo" i]',
+      'input[aria-label*="codigo" i]',
+      'input[id*="code" i]',
+      'input[name*="code" i]',
+      'input[id*="token" i]',
+      'input[name*="token" i]',
+      'input[type="tel"]',
+      'input[type="text"]'
+    ], codeResult.code, 8000);
+
+    if (!codeFilled) {
+      return { ok: false, status: 'dcp-email-code-field-not-found', reason: 'Codigo DCP localizado no Gmail, mas o campo de codigo nao foi encontrado na tela.' };
+    }
+
+    await clickFirstVisible(page, [
+      page.getByRole('button', { name: /confirmar|validar|enviar|entrar|acessar|prosseguir/i }),
+      'button:has-text("Confirmar")',
+      'button:has-text("Validar")',
+      'button:has-text("Enviar")',
+      'button:has-text("Entrar")',
+      'input[type="submit"]',
+      'button[type="submit"]'
+    ], 8000);
+    await page.waitForLoadState('domcontentloaded', { timeout: 30000 }).catch(() => {});
+    await page.waitForTimeout(4000);
+
+    const textSample = await getVisibleText(page);
+    const lower = textSample.toLowerCase();
+    const stillNeedsCode = /c[oó]digo de autentica[cç][aã]o|c[oó]digo de acesso|duplo fator|2fa|enviado.*e-mail|enviado.*email/i.test(textSample);
+    const rejected = /c[oó]digo inv[aá]lido|c[oó]digo expirado|token inv[aá]lido|incorreto/.test(lower);
+    const stillLogin = /idserverjus-front\/#\/login/i.test(page.url());
+    if (!stillNeedsCode && !rejected && !stillLogin) {
+      return { ok: true, status: 'dcp-email-code-submitted', messageId: codeResult.messageId };
+    }
+  }
+
+  return { ok: false, status: 'dcp-email-code-submit-failed', reason: 'Nao foi possivel validar automaticamente o codigo DCP recebido por e-mail.' };
+}
+
 async function discoverGmailPushes({ fromPtBr, dashboardByCnj }) {
   const accessToken = await getGmailAccessToken();
   if (!accessToken) {
@@ -1267,6 +1371,30 @@ async function tryDcpLogin(page, dcp) {
   const needsEmailCode = /c[oó]digo de autentica[cç][aã]o|c[oó]digo de acesso|duplo fator|2fa|enviado.*e-mail|enviado.*email|confirme seu e-mail|confirme seu email/i.test(textSample);
   const rejected = /senha inv[aá]lida|usu[aá]rio inv[aá]lido|credenciais inv[aá]lidas|login inv[aá]lido|incorreto/.test(lower);
   const stillLogin = stillHasLoginFields || /idserverjus-front\/#\/login/i.test(page.url());
+
+  if (needsEmailCode && !rejected) {
+    const codeSubmit = await submitDcpEmailCode(page);
+    if (codeSubmit.ok) {
+      return {
+        ok: true,
+        status: 'dcp-login-complete',
+        emailCode: { status: codeSubmit.status, messageId: codeSubmit.messageId },
+        url: page.url(),
+        title: await page.title(),
+        textSample: await getVisibleText(page)
+      };
+    }
+
+    return {
+      ok: false,
+      status: codeSubmit.status || 'dcp-email-code-required',
+      reason: codeSubmit.reason || 'Portal de Serviços/DCP solicitou codigo de autenticacao enviado por e-mail.',
+      url: page.url(),
+      title: await page.title(),
+      fields: await collectSearchFieldDiagnostics(page),
+      textSample
+    };
+  }
 
   return {
     ok: !needsEmailCode && !rejected && !stillLogin,
