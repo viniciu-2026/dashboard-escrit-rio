@@ -1368,8 +1368,8 @@ async function tryDcpLogin(page, dcp) {
   const fieldsAfterSubmit = await collectSearchFieldDiagnostics(page);
   const stillHasLoginFields = fieldsAfterSubmit.some((field) => /usuario|username|login/i.test(`${field.id || ''} ${field.name || ''} ${field.placeholder || ''}`))
     && fieldsAfterSubmit.some((field) => /senha|password/i.test(`${field.id || ''} ${field.name || ''} ${field.placeholder || ''}`));
-  const needsEmailCode = /c[oó]digo de autentica[cç][aã]o|c[oó]digo de acesso|duplo fator|2fa|enviado.*e-mail|enviado.*email|confirme seu e-mail|confirme seu email/i.test(textSample);
-  const rejected = /senha inv[aá]lida|usu[aá]rio inv[aá]lido|credenciais inv[aá]lidas|login inv[aá]lido|incorreto/.test(lower);
+  const needsEmailCode = !stillHasLoginFields && /c[oó]digo de autentica[cç][aã]o|c[oó]digo de acesso|duplo fator|2fa|enviado.*e-mail|enviado.*email|confirme seu e-mail|confirme seu email/i.test(textSample);
+  const rejected = /senha inv[aá]lida|usu[aá]rio inv[aá]lido|usu[aá]rio ou senha incorreta|credenciais inv[aá]lidas|login inv[aá]lido|incorreto|n[aã]o foi poss[ií]vel efetuar o login|usu[aá]rio est[aá] inativo|acesso ser[aá] bloqueado/.test(lower);
   const stillLogin = stillHasLoginFields || /idserverjus-front\/#\/login/i.test(page.url());
 
   if (needsEmailCode && !rejected) {
