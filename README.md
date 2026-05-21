@@ -98,6 +98,6 @@ Cadastre os Secrets abaixo em `Settings > Secrets and variables > Actions` antes
 - `TRIBUNAL_CPF` e `TRIBUNAL_PASSWORD` para PJe/TJRJ
 - `DCP_CPF` e `DCP_PASSWORD` para o Portal de Serviços/DCP do TJRJ; enquanto esses nomes nao existirem, o runner aceita as credenciais equivalentes ja cadastradas em `EPROC_CPF` e `EPROC_PASSWORD`
 - `FIREBASE_DATABASE_AUTH_TOKEN` ou `FIREBASE_SERVICE_ACCOUNT_JSON`
-- `GMAIL_OAUTH_JSON`, ou o trio `GMAIL_REFRESH_TOKEN`, `GMAIL_CLIENT_ID` e `GMAIL_CLIENT_SECRET`, para a etapa obrigatoria de pushes por e-mail
+- `GMAIL_OAUTH_JSON`, ou o trio `GMAIL_REFRESH_TOKEN`, `GMAIL_CLIENT_ID` e `GMAIL_CLIENT_SECRET`, para a etapa obrigatoria de pushes por e-mail. Para envio automatico do relatorio, o token precisa incluir permissao de envio do Gmail (`gmail.send`).
 
-O workflow nao usa o Chrome local do computador. Ele cria um runner novo no GitHub e usa somente Secrets criptografados do GitHub. Para DCP/TJRJ, a rotina usa login autenticado pelo IdServerJus e consulta a API `consultaprocessual` para ler o ultimo andamento e atualizar o Firebase. Senhas, cookies e tokens nao devem ser gravados no repositorio, na skill ou em logs.
+O workflow nao usa o Chrome local do computador. Ele cria um runner novo no GitHub e usa somente Secrets criptografados do GitHub. Para DCP/TJRJ, a rotina usa login autenticado pelo IdServerJus e consulta a API `consultaprocessual` para ler o ultimo andamento e atualizar o Firebase. Ao final de cada execucao autonoma, tenta enviar um relatorio para `viniciugoncalves@gmail.com` com o que foi atualizado e o que ficou pendente. Senhas, cookies e tokens nao devem ser gravados no repositorio, na skill ou em logs.

@@ -36,6 +36,7 @@ jobs:
       GMAIL_CLIENT_ID: ${{ secrets.GMAIL_CLIENT_ID }}
       GMAIL_CLIENT_SECRET: ${{ secrets.GMAIL_CLIENT_SECRET }}
       GMAIL_OAUTH_JSON: ${{ secrets.GMAIL_OAUTH_JSON }}
+      REPORT_EMAIL_TO: viniciugoncalves@gmail.com
       PROCESS_UPDATE_MODE: remote-api-update
 
     steps:

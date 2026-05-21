@@ -212,6 +212,94 @@ async function gmailGet(accessToken, url) {
   return data;
 }
 
+function base64UrlEncode(value) {
+  return Buffer.from(value, 'utf8').toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+}
+
+function emailSafeText(value) {
+  return String(value || '').replace(/\r/g, '').trim();
+}
+
+function buildEmailReport(report) {
+  const pending = report.consolidated?.processes || [];
+  const dcp = report.dcpApiUpdates;
+  const lines = [
+    `Atualizacao processual automatica - ${report.todayPtBr || todayPtBr()}`,
+    '',
+    `Status: ${report.status}`,
+    `Periodo: ${report.maxVerificationPtBr || '-'} a ${report.todayPtBr || '-'}`,
+    `Pushes/Gmail: ${report.gmail?.status || '-'} (${report.gmail?.discoveredCnjs ?? 0} CNJ(s) descoberto(s))`,
+    `DCP API: ${dcp ? `${dcp.status} - ${dcp.updated || 0}/${dcp.totalCandidates || 0} atualizado(s)` : '-'}`,
+    '',
+    'Processos pendentes/localizados no periodo:',
+    pending.length
+      ? pending.map((process, index) => `${index + 1}. ${process.cnj} - ${process.cliente || 'sem cliente'} - sistema: ${process.dashboardSystem || 'nao identificado'} - origem: ${(process.origins || []).join(', ') || '-'}`).join('\n')
+      : 'Nenhum processo pendente localizado no periodo.',
+    '',
+    'Atualizacoes DCP realizadas:',
+    dcp?.results?.some((item) => item.ok)
+      ? dcp.results.filter((item) => item.ok).map((item) => `- ${item.cnj} (${item.dashboardId || 'sem id'}): ${item.selectedMovementDate || '-'} - ${item.selectedMovement || item.status}`).join('\n')
+      : 'Nenhuma atualizacao DCP gravada nesta execucao.',
+    '',
+    'DCP sem atualizacao automatica:',
+    dcp?.results?.some((item) => !item.ok)
+      ? dcp.results.filter((item) => !item.ok).map((item) => `- ${item.cnj} (${item.dashboardId || 'sem id'}): ${item.status}${item.reason ? ` - ${item.reason}` : ''}`).join('\n')
+      : 'Nenhum.',
+    '',
+    report.localNextStep?.instruction || 'Quando ligar o computador, confira manualmente os processos que permanecerem pendentes fora do alcance da API remota.',
+    '',
+    `Execucao finalizada em: ${report.finishedAt || isoNow()}`
+  ];
+  return lines.join('\n');
+}
+
+async function sendAutomationReportEmail(report) {
+  const to = secretValue('REPORT_EMAIL_TO') || 'viniciugoncalves@gmail.com';
+  if (!to) return { ok: false, status: 'email-recipient-missing' };
+  if (!has('GMAIL_OAUTH_JSON')) {
+    return {
+      ok: false,
+      status: 'email-gmail-oauth-missing',
+      reason: 'GMAIL_OAUTH_JSON ausente; nao foi possivel enviar relatorio por e-mail.'
+    };
+  }
+
+  const accessToken = await getGmailAccessToken();
+  const subject = `Relatorio da atualizacao processual - ${report.todayPtBr || todayPtBr()} - ${report.status}`;
+  const body = buildEmailReport(report);
+  const raw = [
+    `To: ${to}`,
+    `Subject: =?UTF-8?B?${Buffer.from(subject, 'utf8').toString('base64')}?=`,
+    'MIME-Version: 1.0',
+    'Content-Type: text/plain; charset=UTF-8',
+    '',
+    emailSafeText(body)
+  ].join('\r\n');
+
+  const response = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ raw: base64UrlEncode(raw) })
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    return {
+      ok: false,
+      status: 'email-send-failed',
+      reason: `Gmail send HTTP ${response.status}: ${JSON.stringify(data).slice(0, 300)}`
+    };
+  }
+  return {
+    ok: true,
+    status: 'email-sent',
+    to,
+    messageId: data.id || ''
+  };
+}
+
 function extractAuthenticationCode(text) {
   const source = String(text || '');
   const patterns = [
@@ -2440,6 +2528,27 @@ async function main() {
       ? 'Atualizacao remota: processos DCP/TJRJ compativeis sao conferidos e atualizados por API autenticada no GitHub Actions; os demais sistemas continuam pendentes de conferencia local.'
       : 'Proxima etapa local: abrir estes processos no computador do usuario, com certificado digital, ler o teor no tribunal respectivo e so entao atualizar o dashboard.'
   ].join('\n'), 'utf8');
+
+  try {
+    report.emailReport = await sendAutomationReportEmail(report);
+    await writeFile(path.join(reportDir, 'email-report.json'), JSON.stringify(report.emailReport, null, 2), 'utf8');
+    await writeFile(path.join(reportDir, 'github-process-update.json'), JSON.stringify(report, null, 2), 'utf8');
+  } catch (error) {
+    report.emailReport = {
+      ok: false,
+      status: 'email-send-exception',
+      reason: String(error.message || error)
+    };
+    report.warnings.push(`Falha ao enviar relatorio por e-mail: ${report.emailReport.reason}`);
+    await writeFile(path.join(reportDir, 'email-report.json'), JSON.stringify(report.emailReport, null, 2), 'utf8');
+    await writeFile(path.join(reportDir, 'github-process-update.json'), JSON.stringify(report, null, 2), 'utf8');
+  }
+  consoleSummary.emailReport = report.emailReport ? {
+    ok: report.emailReport.ok,
+    status: report.emailReport.status,
+    to: report.emailReport.to,
+    reason: report.emailReport.reason
+  } : null;
   console.log(JSON.stringify(consoleSummary, null, 2));
 
   process.exit(report.ok ? 0 : 2);
