@@ -15,6 +15,7 @@ const cnjPattern = /\b\d{7}-\d{2}\.\d{4}\.\d\.\d{2}\.\d{4}\b/g;
 const gmailListUrl = 'https://gmail.googleapis.com/gmail/v1/users/me/messages';
 const runMode = args.get('mode') || process.env.PROCESS_UPDATE_MODE || '';
 const discoveryOnly = /^(discovery|discovery-list|list|pending-list)$/i.test(runMode);
+const remoteApiUpdate = /^(remote-api-update|dcp-api-update|full-remote-update)$/i.test(runMode);
 
 function has(name) {
   return Boolean(process.env[name] && String(process.env[name]).trim());
@@ -66,6 +67,20 @@ function todayPtBr() {
     month: '2-digit',
     year: 'numeric'
   }).format(new Date());
+}
+
+function isoNow() {
+  return new Date().toISOString();
+}
+
+function cleanText(value) {
+  return String(value || '').replace(/\s+/g, ' ').trim();
+}
+
+function parsePtBrDate(value) {
+  const match = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(String(value || '').trim());
+  if (!match) return 0;
+  return new Date(Number(match[3]), Number(match[2]) - 1, Number(match[1])).getTime();
 }
 
 function tomorrowGmailDate() {
@@ -140,6 +155,20 @@ async function readFirebaseProcesses() {
   const response = await fetch(firebaseUrl, { headers: { 'Cache-Control': 'no-cache' } });
   if (!response.ok) {
     throw new Error(`Firebase HTTP ${response.status}: ${(await response.text()).slice(0, 300)}`);
+  }
+  return response.json();
+}
+
+async function patchFirebaseProcess(processId, payload) {
+  if (!processId) throw new Error('Dashboard id ausente para atualizar Firebase.');
+  const url = `https://dashboard-vg-default-rtdb.firebaseio.com/dashboard/processes/${encodeURIComponent(processId)}.json`;
+  const response = await fetch(url, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json; charset=utf-8' },
+    body: JSON.stringify(payload)
+  });
+  if (!response.ok) {
+    throw new Error(`Firebase PATCH ${response.status}: ${(await response.text()).slice(0, 300)}`);
   }
   return response.json();
 }
@@ -1529,6 +1558,274 @@ async function searchDcpProcess(page, process, dcp) {
   };
 }
 
+function dcpCredentials() {
+  return {
+    user: secretValue('DCP_CPF', 'EPROC_CPF') || secretValue('TRIBUNAL_CPF'),
+    password: secretValue('DCP_PASSWORD', 'EPROC_PASSWORD') || secretValue('TRIBUNAL_PASSWORD')
+  };
+}
+
+async function dcpFetchJson(url, options = {}) {
+  const response = await fetch(url, options);
+  const text = await response.text();
+  let json = null;
+  if (text) {
+    try {
+      json = JSON.parse(text);
+    } catch {
+      json = null;
+    }
+  }
+  if (!response.ok) {
+    throw new Error(`DCP HTTP ${response.status}: ${text.slice(0, 300)}`);
+  }
+  return json;
+}
+
+async function createDcpApiSession() {
+  const { user, password } = dcpCredentials();
+  if (!user || !password) {
+    return {
+      ok: false,
+      status: 'dcp-api-secrets-missing',
+      reason: 'Faltam Secrets DCP_CPF/DCP_PASSWORD ou equivalentes para o DCP/TJRJ.'
+    };
+  }
+
+  const authorization = `Basic ${Buffer.from('tjrj:s3cr3t').toString('base64')}`;
+  const session = await dcpFetchJson('https://www3.tjrj.jus.br/idserverjus-api/sessao', {
+    method: 'POST',
+    headers: {
+      Authorization: authorization,
+      'Content-Type': 'application/json;charset=UTF-8'
+    },
+    body: JSON.stringify({ usuario: user, senha: password })
+  });
+
+  const tokenResponse = await dcpFetchJson('https://www3.tjrj.jus.br/idserverjus-api/sessao/criarJwt', {
+    method: 'POST',
+    headers: {
+      Authorization: authorization,
+      'Content-Type': 'application/json;charset=UTF-8'
+    },
+    body: JSON.stringify({
+      chave: session.chave,
+      idUsu: session.idUsu,
+      inicio: session.inicio,
+      ultimoAcesso: session.ultimoAcesso
+    })
+  });
+
+  return {
+    ok: true,
+    status: 'dcp-api-login-complete',
+    idUsu: session.idUsu,
+    headers: {
+      Authorization: `Bearer ${session.chave}`,
+      'Content-Type': 'application/json;charset=UTF-8',
+      Accept: 'application/json, text/plain, */*',
+      Cookie: [
+        `SEGSESSIONID=${session.chave}`,
+        'SEGCODORGAO=2385',
+        'SIGLASISTEMA=PORTALSERVICOS',
+        `TOKENJWT=${tokenResponse.token || ''}`
+      ].join('; ')
+    }
+  };
+}
+
+function summarizeDcpDetail(detail) {
+  const last = detail?.ultMovimentoProc || {};
+  const date = cleanText(last.dtMovimento || last.dtAlt || last.dtJuntada || last.dtDigitacao || last.dtConclusao || last.dt || '');
+  const kind = cleanText(last.descrMov || last.descricao || '');
+  const description = cleanText(last.descricao || '');
+  const core = cleanText(`${kind}${description && description !== kind ? `: ${description}` : ''}`);
+  const details = [];
+  for (const movement of last.movimentosExibicao || []) {
+    for (const item of movement.detalhesMovimento || []) {
+      const value = cleanText(`${item.codigo || ''} ${item.descricao || ''}`);
+      if (value && !details.includes(value)) details.push(value);
+    }
+  }
+  return {
+    date,
+    dateSort: parsePtBrDate(date),
+    core,
+    details,
+    serventia: cleanText(detail?.descServ || detail?.descVara || '')
+  };
+}
+
+function buildDcpDashboardText(summary) {
+  const core = summary.core || 'andamento localizado no portal autenticado';
+  const datePart = summary.date ? `em ${summary.date} ` : '';
+  const suffix = summary.serventia ? ` no ${summary.serventia}` : '';
+  return `DCP/TJRJ conferido em ${todayPtBr()}: ${datePart}${core}${suffix}.`;
+}
+
+async function queryDcpProcessByApi(session, process) {
+  const base = 'https://www3.tjrj.jus.br/consultaprocessual/api';
+  const lookup = await dcpFetchJson(`${base}/processos/por-numeracao-unica`, {
+    method: 'POST',
+    headers: session.headers,
+    body: JSON.stringify({ tipoProcesso: '1', codigoProcesso: process.cnj })
+  });
+
+  if (!Array.isArray(lookup) || lookup.length === 0) {
+    return {
+      ok: false,
+      status: 'dcp-api-process-not-found',
+      reason: 'Processo nao retornou na busca por numeracao unica do DCP/TJRJ.'
+    };
+  }
+
+  const candidates = [];
+  const seen = new Set();
+  for (const item of lookup) {
+    const code = item.numProcesso || item.codigoProcesso;
+    const type = item.tipoProcesso || 1;
+    const key = `${type}:${code}`;
+    if (!code || seen.has(key)) continue;
+    seen.add(key);
+
+    try {
+      const detail = await dcpFetchJson(`${base}/processos/por-numero/portal`, {
+        method: 'POST',
+        headers: session.headers,
+        body: JSON.stringify({ tipoProcesso: type, codigoProcesso: code })
+      });
+      candidates.push({
+        numProcesso: code,
+        tipoProcesso: type,
+        codigoCnj: detail?.codCnj || item.codigoCnj || process.cnj,
+        classe: item.classe || detail?.descricaoTipAutos || '',
+        summary: summarizeDcpDetail(detail)
+      });
+    } catch (error) {
+      candidates.push({
+        numProcesso: code,
+        tipoProcesso: type,
+        error: String(error.message || error)
+      });
+    }
+  }
+
+  const valid = candidates.filter((candidate) => candidate.summary?.core || candidate.summary?.date);
+  if (!valid.length) {
+    return {
+      ok: false,
+      status: 'dcp-api-detail-not-readable',
+      reason: 'Processo localizado no DCP/TJRJ, mas o detalhe do andamento nao foi retornado.',
+      candidates
+    };
+  }
+
+  valid.sort((a, b) => (b.summary.dateSort || 0) - (a.summary.dateSort || 0));
+  return {
+    ok: true,
+    status: 'dcp-api-process-checked',
+    best: valid[0],
+    candidates
+  };
+}
+
+async function runDcpApiUpdates(report) {
+  const processes = (report.consolidated?.processes || []).filter((process) => {
+    if (!String(process.cnj || '').includes('.8.19.')) return false;
+    const system = String(process.dashboardSystem || '').toLowerCase();
+    return system === 'dcp' || system === 'no-sistema' || !system;
+  });
+
+  if (!processes.length) {
+    return {
+      ok: true,
+      status: 'dcp-api-no-candidates',
+      totalCandidates: 0,
+      updated: 0,
+      results: []
+    };
+  }
+
+  const session = await createDcpApiSession();
+  if (!session.ok) {
+    return {
+      ok: false,
+      ...session,
+      totalCandidates: processes.length,
+      updated: 0,
+      results: []
+    };
+  }
+
+  const results = [];
+  let updated = 0;
+  for (const process of processes) {
+    try {
+      const checked = await queryDcpProcessByApi(session, process);
+      if (!checked.ok) {
+        results.push({
+          cnj: process.cnj,
+          dashboardId: process.dashboardId,
+          cliente: process.cliente,
+          ok: false,
+          status: checked.status,
+          reason: checked.reason
+        });
+        continue;
+      }
+
+      if (!process.dashboardId) {
+        results.push({
+          cnj: process.cnj,
+          cliente: process.cliente,
+          ok: false,
+          status: 'dcp-api-dashboard-id-missing',
+          reason: 'Processo encontrado, mas sem id do dashboard para gravar.'
+        });
+        continue;
+      }
+
+      const res = buildDcpDashboardText(checked.best.summary);
+      await patchFirebaseProcess(process.dashboardId, {
+        res,
+        ver: todayPtBr(),
+        updatedAt: isoNow(),
+        updatedBy: 'GitHub Actions - DCP API autenticado',
+        updatedByUid: ''
+      });
+      updated += 1;
+      results.push({
+        cnj: process.cnj,
+        dashboardId: process.dashboardId,
+        cliente: process.cliente,
+        ok: true,
+        status: checked.status,
+        ver: todayPtBr(),
+        res,
+        selectedMovementDate: checked.best.summary.date,
+        selectedMovement: checked.best.summary.core
+      });
+    } catch (error) {
+      results.push({
+        cnj: process.cnj,
+        dashboardId: process.dashboardId,
+        cliente: process.cliente,
+        ok: false,
+        status: 'dcp-api-error',
+        reason: String(error.message || error)
+      });
+    }
+  }
+
+  return {
+    ok: results.every((item) => item.ok || /not-found|id-missing/.test(item.status || '')),
+    status: updated ? 'dcp-api-dashboard-updated' : 'dcp-api-no-dashboard-updates',
+    totalCandidates: processes.length,
+    updated,
+    results
+  };
+}
+
 function isEprocLoginOrExpired(url, title, text) {
   const haystack = `${url || ''}\n${title || ''}\n${text || ''}`;
   return /sess.*foi encerrada|entrar no sistema|usu.rio\s+senha|senha\s+visibility|esqueci minha senha|externo_controlador\.php\?acao=principal/i.test(haystack);
@@ -1889,7 +2186,7 @@ async function main() {
   await mkdir(reportDir, { recursive: true });
 
   const missing = [];
-  if (!discoveryOnly) {
+  if (!discoveryOnly && !remoteApiUpdate) {
     for (const name of ['GOVBR_CPF', 'GOVBR_PASSWORD']) {
       if (!has(name)) missing.push(name);
     }
@@ -1900,11 +2197,13 @@ async function main() {
     status: 'blocked',
     source: firebaseUrl,
     startedAt: new Date().toISOString(),
-    mode: discoveryOnly ? 'discovery-list' : 'full-remote-probe',
+    mode: discoveryOnly ? 'discovery-list' : (remoteApiUpdate ? 'remote-api-update' : 'full-remote-probe'),
     environment: {
       githubActions: process.env.GITHUB_ACTIONS === 'true',
       hasGovbrCpf: has('GOVBR_CPF'),
       hasGovbrPassword: has('GOVBR_PASSWORD'),
+      hasDcpCpf: has('DCP_CPF') || has('EPROC_CPF') || has('TRIBUNAL_CPF'),
+      hasDcpPassword: has('DCP_PASSWORD') || has('EPROC_PASSWORD') || has('TRIBUNAL_PASSWORD'),
       hasFirebaseDatabaseAuthToken: has('FIREBASE_DATABASE_AUTH_TOKEN'),
       hasFirebaseServiceAccountJson: has('FIREBASE_SERVICE_ACCOUNT_JSON'),
       hasGmailCredentialHint: has('GMAIL_OAUTH_JSON') || (has('GMAIL_REFRESH_TOKEN') && has('GMAIL_CLIENT_ID') && has('GMAIL_CLIENT_SECRET')) || has('GMAIL_CONNECTOR_AVAILABLE')
@@ -2000,12 +2299,15 @@ async function main() {
   if (!report.environment.hasGmailCredentialHint) {
     report.blockers.push('Falta configuracao de Gmail/pushes no runner; a descoberta por e-mail ficara incompleta.');
   }
+  if (remoteApiUpdate && (!report.environment.hasDcpCpf || !report.environment.hasDcpPassword)) {
+    report.blockers.push('Faltam Secrets DCP_CPF/DCP_PASSWORD ou equivalentes para a verificacao DCP/TJRJ por API.');
+  }
 
-  if (!discoveryOnly && !report.blockers.some((item) => item.startsWith('Secrets ausentes'))) {
+  if (!discoveryOnly && !remoteApiUpdate && !report.blockers.some((item) => item.startsWith('Secrets ausentes'))) {
     await runBrowserSmoke(report);
   }
 
-  if (!discoveryOnly && report.blockers.length === 0) {
+  if (!discoveryOnly && !remoteApiUpdate && report.blockers.length === 0) {
     try {
       report.jusbrLogin = await runJusbrGovLogin(report);
     } catch (error) {
@@ -2022,7 +2324,14 @@ async function main() {
     }
   }
 
-  if (!discoveryOnly && report.consolidated?.totalToVerifyInTribunals > 0) {
+  if (remoteApiUpdate && report.blockers.length === 0) {
+    report.dcpApiUpdates = await runDcpApiUpdates(report);
+    if (!report.dcpApiUpdates.ok) {
+      report.blockers.push(`Falha na verificacao DCP/TJRJ por API: ${report.dcpApiUpdates.reason || report.dcpApiUpdates.status}`);
+    }
+  }
+
+  if (!discoveryOnly && !remoteApiUpdate && report.consolidated?.totalToVerifyInTribunals > 0) {
     report.tribunalProbes = await runTribunalProbes(report);
     if (!report.tribunalProbes.ok) {
       report.blockers.push(`Nao foi possivel abrir os processos no tribunal para ler o teor: ${report.tribunalProbes.reason || report.tribunalProbes.status}`);
@@ -2042,9 +2351,11 @@ async function main() {
   report.finishedAt = new Date().toISOString();
   report.ok = discoveryOnly
     ? report.blockers.length === 0 && report.gmail?.ok === true
-    : report.blockers.length === 0 && report.browser?.ok === true && report.gmail?.ok === true;
+    : (remoteApiUpdate
+      ? report.blockers.length === 0 && report.gmail?.ok === true && report.dcpApiUpdates?.ok !== false
+      : report.blockers.length === 0 && report.browser?.ok === true && report.gmail?.ok === true);
   report.status = report.ok
-    ? (discoveryOnly ? 'pending-list-ready-for-local-update' : 'discovery-complete-teor-pendente')
+    ? (discoveryOnly ? 'pending-list-ready-for-local-update' : (remoteApiUpdate ? 'remote-api-update-complete' : 'discovery-complete-teor-pendente'))
     : 'blocked';
 
   const consoleSummary = {
@@ -2087,6 +2398,19 @@ async function main() {
         url: probe.url
       })) : []
     } : null,
+    dcpApiUpdates: report.dcpApiUpdates ? {
+      ok: report.dcpApiUpdates.ok,
+      status: report.dcpApiUpdates.status,
+      totalCandidates: report.dcpApiUpdates.totalCandidates,
+      updated: report.dcpApiUpdates.updated,
+      results: report.dcpApiUpdates.results?.map((item) => ({
+        ok: item.ok,
+        status: item.status,
+        cnj: item.cnj,
+        dashboardId: item.dashboardId,
+        selectedMovementDate: item.selectedMovementDate
+      }))
+    } : null,
     warnings: report.warnings,
     blockers: report.blockers
   };
@@ -2112,7 +2436,9 @@ async function main() {
     '',
     ...(report.consolidated?.processes || []).map((process, index) => `${index + 1}. ${process.cnj} - ${process.cliente || 'sem cliente no dashboard'} - sistema: ${process.dashboardSystem || 'nao identificado'} - origem: ${(process.origins || []).join(', ') || '-'}`),
     '',
-    'Proxima etapa local: abrir estes processos no computador do usuario, com certificado digital, ler o teor no tribunal respectivo e so entao atualizar o dashboard.'
+    remoteApiUpdate
+      ? 'Atualizacao remota: processos DCP/TJRJ compativeis sao conferidos e atualizados por API autenticada no GitHub Actions; os demais sistemas continuam pendentes de conferencia local.'
+      : 'Proxima etapa local: abrir estes processos no computador do usuario, com certificado digital, ler o teor no tribunal respectivo e so entao atualizar o dashboard.'
   ].join('\n'), 'utf8');
   console.log(JSON.stringify(consoleSummary, null, 2));
 
