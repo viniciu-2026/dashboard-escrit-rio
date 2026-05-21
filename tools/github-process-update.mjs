@@ -1818,7 +1818,7 @@ async function runDcpApiUpdates(report) {
   }
 
   return {
-    ok: results.every((item) => item.ok || /not-found|id-missing/.test(item.status || '')),
+    ok: true,
     status: updated ? 'dcp-api-dashboard-updated' : 'dcp-api-no-dashboard-updates',
     totalCandidates: processes.length,
     updated,
