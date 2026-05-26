@@ -220,33 +220,74 @@ function emailSafeText(value) {
   return String(value || '').replace(/\r/g, '').trim();
 }
 
+function emailProcessName(process) {
+  return cleanText(process?.cliente || process?.client || process?.name || 'sem cliente no dashboard');
+}
+
+function markdownTable(rows) {
+  if (!rows.length) return 'Nenhum.';
+  const header = [
+    '| Cliente / Processo | Numero do processo | Resultado |',
+    '|---|---|---|'
+  ];
+  return header.concat(rows.map((row) => `| ${row.name} | \`${row.cnj}\` | ${row.result} |`)).join('\n');
+}
+
 function buildEmailReport(report) {
   const pending = report.consolidated?.processes || [];
   const dcp = report.dcpApiUpdates;
+  const dcpResultsByCnj = new Map((dcp?.results || []).map((item) => [item.cnj, item]));
+  const explicitUpdates = report.dashboardUpdates || report.updates || [];
+  const explicitUpdatesByCnj = new Map(explicitUpdates.map((item) => [item.cnj, item]));
+
+  const rows = pending.map((process) => {
+    const dcpResult = dcpResultsByCnj.get(process.cnj);
+    const explicitUpdate = explicitUpdatesByCnj.get(process.cnj);
+    let result = 'Nao atualizado automaticamente';
+
+    if (explicitUpdate?.created) {
+      result = 'Cadastrado e atualizado com sucesso';
+    } else if (explicitUpdate?.ok) {
+      result = 'Atualizado com sucesso';
+    } else if (dcpResult?.ok) {
+      result = 'Atualizado com sucesso';
+    } else if (dcpResult && !dcpResult.ok) {
+      result = 'Nao atualizado automaticamente';
+    }
+
+    return {
+      name: emailProcessName(process),
+      cnj: process.cnj,
+      result
+    };
+  });
+
+  const updatedCount = rows.filter((row) => /Atualizado com sucesso|Cadastrado e atualizado com sucesso/.test(row.result)).length;
+  const notUpdatedCount = rows.length - updatedCount;
+  const failedCount = [
+    ...explicitUpdates.filter((item) => item && item.ok === false),
+    ...(dcp?.results || []).filter((item) => item?.ok === false && /update|patch|firebase|gravar|gravacao/i.test(`${item.status || ''} ${item.reason || ''}`))
+  ].length;
+
   const lines = [
-    `Atualizacao processual automatica - ${report.todayPtBr || todayPtBr()}`,
+    `Atualizacao Processual - ${report.todayPtBr || todayPtBr()}`,
     '',
-    `Status: ${report.status}`,
     `Periodo: ${report.maxVerificationPtBr || '-'} a ${report.todayPtBr || '-'}`,
-    `Pushes/Gmail: ${report.gmail?.status || '-'} (${report.gmail?.discoveredCnjs ?? 0} CNJ(s) descoberto(s))`,
-    `DCP API: ${dcp ? `${dcp.status} - ${dcp.updated || 0}/${dcp.totalCandidates || 0} atualizado(s)` : '-'}`,
     '',
-    'Processos pendentes/localizados no periodo:',
-    pending.length
-      ? pending.map((process, index) => `${index + 1}. ${process.cnj} - ${process.cliente || 'sem cliente'} - sistema: ${process.dashboardSystem || 'nao identificado'} - origem: ${(process.origins || []).join(', ') || '-'}`).join('\n')
-      : 'Nenhum processo pendente localizado no periodo.',
+    'Processos com movimentacao identificada:',
     '',
-    'Atualizacoes DCP realizadas:',
-    dcp?.results?.some((item) => item.ok)
-      ? dcp.results.filter((item) => item.ok).map((item) => `- ${item.cnj} (${item.dashboardId || 'sem id'}): ${item.selectedMovementDate || '-'} - ${item.selectedMovement || item.status}`).join('\n')
-      : 'Nenhuma atualizacao DCP gravada nesta execucao.',
+    markdownTable(rows),
     '',
-    'DCP sem atualizacao automatica:',
-    dcp?.results?.some((item) => !item.ok)
-      ? dcp.results.filter((item) => !item.ok).map((item) => `- ${item.cnj} (${item.dashboardId || 'sem id'}): ${item.status}${item.reason ? ` - ${item.reason}` : ''}`).join('\n')
-      : 'Nenhum.',
+    'Resumo:',
     '',
-    report.localNextStep?.instruction || 'Quando ligar o computador, confira manualmente os processos que permanecerem pendentes fora do alcance da API remota.',
+    `- Processos com movimentacao identificada: ${rows.length}`,
+    `- Atualizados/cadastrados no dashboard: ${updatedCount}`,
+    `- Nao atualizados automaticamente: ${notUpdatedCount}`,
+    `- Falhas de atualizacao: ${failedCount}`,
+    '',
+    notUpdatedCount
+      ? 'Observacao: os processos nao atualizados automaticamente precisam de conferencia autenticada no tribunal antes de alterar o dashboard.'
+      : 'Todos os processos da lista foram atualizados ou cadastrados com sucesso.',
     '',
     `Execucao finalizada em: ${report.finishedAt || isoNow()}`
   ];
