@@ -48,6 +48,14 @@ jobs:
         with:
           node-version: "22"
 
+      - name: Preparar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Instalar dependencias Python
+        run: python -m pip install --upgrade requests pymupdf pyjwt cryptography
+
       - name: Validar Secrets obrigatorios
         shell: pwsh
         run: |
@@ -69,6 +77,8 @@ jobs:
           mkdir -p automation-report
           echo "Executando preflight..."
           timeout 180s pwsh -NoProfile -ExecutionPolicy Bypass -File ./tools/run-process-update.ps1 | tee automation-report/preflight.json
+          echo "Atualizando processos PJe/TJRJ por MNI/SOAP autenticado..."
+          AUTOMATION_REPORT_DIR=automation-report timeout 1200s python ./tools/run-mni-update.py | tee automation-report/mni-update.log
           echo "Gerando lista de processos pendentes e atualizando DCP/TJRJ por API autenticada..."
           timeout 900s node ./tools/github-process-update.mjs --mode remote-api-update --report-dir automation-report | tee automation-report/github-process-update.log
 
