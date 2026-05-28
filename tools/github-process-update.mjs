@@ -1,4 +1,5 @@
 import { mkdir, writeFile } from 'node:fs/promises';
+import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { Buffer } from 'node:buffer';
 import crypto from 'node:crypto';
@@ -11,6 +12,7 @@ for (let i = 2; i < process.argv.length; i += 1) {
 }
 
 const reportDir = args.get('report-dir') || path.join(process.cwd(), 'automation-report');
+const pendingFile = args.get('pending-file') || '';
 const firebaseUrl = 'https://dashboard-vg-default-rtdb.firebaseio.com/dashboard/processes.json';
 const cnjPattern = /\b\d{7}-\d{2}\.\d{4}\.\d\.\d{2}\.\d{4}\b/g;
 const gmailListUrl = 'https://gmail.googleapis.com/gmail/v1/users/me/messages';
@@ -159,6 +161,8 @@ async function firebaseFetch(url, options = {}) {
   let targetUrl = url;
   if (has('FIREBASE_DATABASE_AUTH_TOKEN')) {
     targetUrl = firebaseUrlWithDatabaseToken(url);
+  } else if (has('FIREBASE_ACCESS_TOKEN') || has('GCLOUD_ACCESS_TOKEN')) {
+    headers.Authorization = `Bearer ${secretValue('FIREBASE_ACCESS_TOKEN', 'GCLOUD_ACCESS_TOKEN')}`;
   } else {
     const accessToken = await getFirebaseAccessToken();
     if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
@@ -2379,7 +2383,8 @@ async function main() {
   await mkdir(reportDir, { recursive: true });
 
   const missing = [];
-  if (!discoveryOnly && !remoteApiUpdate) {
+  const hasLocalTribunalSession = has('TRIBUNAL_BROWSER_WS') || (has('TRIBUNAL_PROFILE_DIR') && secretValue('TRIBUNAL_SESSION_CONFIRMED') === '1');
+  if (!discoveryOnly && !remoteApiUpdate && !hasLocalTribunalSession) {
     for (const name of ['GOVBR_CPF', 'GOVBR_PASSWORD']) {
       if (!has(name)) missing.push(name);
     }
@@ -2399,6 +2404,8 @@ async function main() {
       hasDcpPassword: has('DCP_PASSWORD') || has('EPROC_PASSWORD') || has('TRIBUNAL_PASSWORD'),
       hasFirebaseDatabaseAuthToken: has('FIREBASE_DATABASE_AUTH_TOKEN'),
       hasFirebaseServiceAccountJson: has('FIREBASE_SERVICE_ACCOUNT_JSON'),
+      hasFirebaseAccessToken: has('FIREBASE_ACCESS_TOKEN') || has('GCLOUD_ACCESS_TOKEN'),
+      hasLocalTribunalSession,
       hasGmailCredentialHint: has('GMAIL_OAUTH_JSON') || (has('GMAIL_REFRESH_TOKEN') && has('GMAIL_CLIENT_ID') && has('GMAIL_CLIENT_SECRET')) || has('GMAIL_CONNECTOR_AVAILABLE')
     },
     warnings: [],
@@ -2448,19 +2455,32 @@ async function main() {
     report.eligibleCnjs = eligible.length;
     report.maxVerificationPtBr = maxVerification || null;
     report.todayPtBr = todayPtBr();
-    try {
-      report.gmail = await discoverGmailPushes({
-        fromPtBr: maxVerification || todayPtBr(),
-        dashboardByCnj
-      });
-    } catch (error) {
+    if (pendingFile) {
+      const pending = JSON.parse(await readFile(pendingFile, 'utf8'));
+      const pendingProcesses = Array.isArray(pending.processes) ? pending.processes : [];
       report.gmail = {
-        ok: false,
-        status: 'blocked',
-        reason: 'Falha ao consultar Gmail/pushes.',
-        error: String(error.message || error)
+        ok: true,
+        status: 'pending-file-loaded',
+        listedMessages: 0,
+        messagesWithCnj: 0,
+        discoveredCnjs: pendingProcesses.length,
+        processes: pendingProcesses
       };
-      report.blockers.push('Nao foi possivel consultar Gmail/pushes; a descoberta de movimentacoes fica incompleta.');
+    } else {
+      try {
+        report.gmail = await discoverGmailPushes({
+          fromPtBr: maxVerification || todayPtBr(),
+          dashboardByCnj
+        });
+      } catch (error) {
+        report.gmail = {
+          ok: false,
+          status: 'blocked',
+          reason: 'Falha ao consultar Gmail/pushes.',
+          error: String(error.message || error)
+        };
+        report.blockers.push('Nao foi possivel consultar Gmail/pushes; a descoberta de movimentacoes fica incompleta.');
+      }
     }
     report.consolidated = {
       status: 'teor-pendente',
@@ -2486,10 +2506,10 @@ async function main() {
   if (missing.length) {
     report.blockers.push(`Secrets ausentes no GitHub: ${missing.join(', ')}.`);
   }
-  if (!report.environment.hasFirebaseDatabaseAuthToken && !report.environment.hasFirebaseServiceAccountJson) {
+  if (!report.environment.hasFirebaseDatabaseAuthToken && !report.environment.hasFirebaseServiceAccountJson && !report.environment.hasFirebaseAccessToken) {
     report.blockers.push('Falta Secret FIREBASE_DATABASE_AUTH_TOKEN ou FIREBASE_SERVICE_ACCOUNT_JSON para gravar alteracoes no Firebase.');
   }
-  if (!report.environment.hasGmailCredentialHint) {
+  if (!pendingFile && !report.environment.hasGmailCredentialHint) {
     report.blockers.push('Falta configuracao de Gmail/pushes no runner; a descoberta por e-mail ficara incompleta.');
   }
   if (remoteApiUpdate && (!report.environment.hasDcpCpf || !report.environment.hasDcpPassword)) {
