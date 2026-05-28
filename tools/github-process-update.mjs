@@ -1,6 +1,7 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { Buffer } from 'node:buffer';
+import crypto from 'node:crypto';
 
 const args = new Map();
 for (let i = 2; i < process.argv.length; i += 1) {
@@ -16,6 +17,7 @@ const gmailListUrl = 'https://gmail.googleapis.com/gmail/v1/users/me/messages';
 const runMode = args.get('mode') || process.env.PROCESS_UPDATE_MODE || '';
 const discoveryOnly = /^(discovery|discovery-list|list|pending-list)$/i.test(runMode);
 const remoteApiUpdate = /^(remote-api-update|dcp-api-update|full-remote-update)$/i.test(runMode);
+let firebaseAccessToken = '';
 
 function has(name) {
   return Boolean(process.env[name] && String(process.env[name]).trim());
@@ -102,6 +104,68 @@ function base64UrlDecode(value = '') {
   return Buffer.from(normalized, 'base64').toString('utf8');
 }
 
+function firebaseUrlWithDatabaseToken(url) {
+  const token = secretValue('FIREBASE_DATABASE_AUTH_TOKEN');
+  if (!token) return url;
+  const parsed = new URL(url);
+  parsed.searchParams.set('auth', token);
+  return parsed.toString();
+}
+
+async function getFirebaseAccessToken() {
+  if (firebaseAccessToken) return firebaseAccessToken;
+  const serviceAccountJson = secretValue('FIREBASE_SERVICE_ACCOUNT_JSON');
+  if (!serviceAccountJson) return '';
+
+  const serviceAccount = JSON.parse(serviceAccountJson);
+  if (!serviceAccount.client_email || !serviceAccount.private_key) {
+    throw new Error('FIREBASE_SERVICE_ACCOUNT_JSON sem client_email ou private_key.');
+  }
+
+  const base64url = (value) => Buffer.from(value).toString('base64url');
+  const now = Math.floor(Date.now() / 1000);
+  const unsigned = [
+    base64url(JSON.stringify({ alg: 'RS256', typ: 'JWT' })),
+    base64url(JSON.stringify({
+      iss: serviceAccount.client_email,
+      scope: 'https://www.googleapis.com/auth/firebase.database https://www.googleapis.com/auth/userinfo.email',
+      aud: 'https://oauth2.googleapis.com/token',
+      iat: now,
+      exp: now + 3600
+    }))
+  ].join('.');
+  const signer = crypto.createSign('RSA-SHA256');
+  signer.update(unsigned);
+  signer.end();
+  const assertion = `${unsigned}.${signer.sign(serviceAccount.private_key, 'base64url')}`;
+  const response = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
+      assertion
+    })
+  });
+  const data = await response.json();
+  if (!response.ok || !data.access_token) {
+    throw new Error(`Firebase OAuth HTTP ${response.status}: ${JSON.stringify(data).slice(0, 300)}`);
+  }
+  firebaseAccessToken = data.access_token;
+  return firebaseAccessToken;
+}
+
+async function firebaseFetch(url, options = {}) {
+  const headers = { ...(options.headers || {}) };
+  let targetUrl = url;
+  if (has('FIREBASE_DATABASE_AUTH_TOKEN')) {
+    targetUrl = firebaseUrlWithDatabaseToken(url);
+  } else {
+    const accessToken = await getFirebaseAccessToken();
+    if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
+  }
+  return fetch(targetUrl, { ...options, headers });
+}
+
 function collectMessageText(payload, chunks = []) {
   if (!payload) return chunks;
   if (payload.body?.data && /^text\/(plain|html)$/i.test(payload.mimeType || '')) {
@@ -152,7 +216,7 @@ function urlsFromText(text) {
 }
 
 async function readFirebaseProcesses() {
-  const response = await fetch(firebaseUrl, { headers: { 'Cache-Control': 'no-cache' } });
+  const response = await firebaseFetch(firebaseUrl, { headers: { 'Cache-Control': 'no-cache' } });
   if (!response.ok) {
     throw new Error(`Firebase HTTP ${response.status}: ${(await response.text()).slice(0, 300)}`);
   }
@@ -162,7 +226,7 @@ async function readFirebaseProcesses() {
 async function patchFirebaseProcess(processId, payload) {
   if (!processId) throw new Error('Dashboard id ausente para atualizar Firebase.');
   const url = `https://dashboard-vg-default-rtdb.firebaseio.com/dashboard/processes/${encodeURIComponent(processId)}.json`;
-  const response = await fetch(url, {
+  const response = await firebaseFetch(url, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json; charset=utf-8' },
     body: JSON.stringify(payload)
