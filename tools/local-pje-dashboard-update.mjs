@@ -42,24 +42,27 @@ function splitCnj(cnj) {
   };
 }
 
-function summarizePjeText(text, cnj) {
+function looksLikeTimelineOnly(text) {
+  return /icone de atualizar|icone de recolher|processo detalhes|autos digitais/i.test(cleanText(text));
+}
+
+function summarizePjeDocumentText(text, label = '') {
   const normalized = cleanText(text);
-  const dateMatches = [...normalized.matchAll(/\b(\d{2}\/\d{2}\/\d{4})\b/g)];
-  if (!dateMatches.length) {
-    return `PJe/TJRJ conferido em ${today}: processo aberto em consulta autenticada, mas a movimentacao nao apareceu em texto estruturado.`;
+  if (normalized.length < 120 || looksLikeTimelineOnly(normalized)) {
+    throw new Error('Documento integral nao foi lido; texto extraido parece cronologia ou esta vazio.');
   }
 
-  const picked = dateMatches[0];
-  const start = Math.max(0, picked.index - 80);
-  const end = Math.min(normalized.length, picked.index + 520);
-  let excerpt = normalized.slice(start, end);
-  const cnjIndex = excerpt.indexOf(cnj);
-  if (cnjIndex >= 0 && cnjIndex < 120) excerpt = excerpt.slice(cnjIndex + cnj.length);
-  excerpt = cleanText(excerpt)
-    .replace(/^[-:;. ]+/, '')
-    .slice(0, 420)
-    .replace(/\s+\S*$/, '');
-  return `PJe/TJRJ conferido em ${today}: ${excerpt}.`;
+  const sentences = normalized
+    .split(/(?<=[.!?])\s+/)
+    .map((sentence) => cleanText(sentence))
+    .filter(Boolean);
+  const priority = sentences.filter((sentence) => (
+    /defiro|indefiro|determino|intime-se|cite-se|expeca-se|julgo|homologo|designo|condeno|absolvo|manifestar|prazo|audiencia|sentenca|decisao|despacho/i.test(sentence)
+  ));
+  const selected = (priority.length ? priority : sentences).slice(0, 4).join(' ');
+  const excerpt = cleanText(selected).slice(0, 650).replace(/\s+\S*$/, '');
+  const prefix = label ? `PJe/TJRJ: lido ${label}` : 'PJe/TJRJ: lido o documento vinculado ao ultimo andamento';
+  return `${prefix} em ${today}. ${excerpt}`;
 }
 
 async function firebaseFetch(url, options = {}) {
@@ -121,6 +124,45 @@ async function clickFirst(page, locators, timeout = 3000) {
     }
   }
   return false;
+}
+
+async function extractPjeDocumentText(context, detailPage) {
+  const candidates = detailPage.locator('a, button, input[type="button"], input[type="submit"]');
+  const count = Math.min(await candidates.count().catch(() => 0), 120);
+  const terms = /despacho|decis[aã]o|senten[cç]a|ac[oó]rd[aã]o|intima[cç][aã]o|certid[aã]o|mandado|peti[cç][aã]o|anexo|outros documentos|visualizar|documento|\d{6,}/i;
+  const attempts = [];
+
+  for (let index = 0; index < count; index += 1) {
+    const candidate = candidates.nth(index);
+    const meta = await candidate.evaluate((element) => ({
+      text: (element.textContent || '').replace(/\s+/g, ' ').trim(),
+      title: element.getAttribute('title') || '',
+      value: element.getAttribute('value') || '',
+      href: element.getAttribute('href') || ''
+    })).catch(() => null);
+    const label = cleanText(`${meta?.text || ''} ${meta?.title || ''} ${meta?.value || ''}`);
+    if (!terms.test(`${label} ${meta?.href || ''}`)) continue;
+    if (/voltar|fechar|imprimir lista|atualizar|recolher|lupa/i.test(label)) continue;
+
+    try {
+      const popupPromise = context.waitForEvent('page', { timeout: 6000 }).catch(() => null);
+      await candidate.click({ timeout: 5000 });
+      const popup = await popupPromise;
+      const docPage = popup || detailPage;
+      await docPage.waitForLoadState('domcontentloaded', { timeout: 20000 }).catch(() => {});
+      await docPage.waitForTimeout(2500);
+      const text = await docPage.locator('body').innerText({ timeout: 10000 }).catch(() => '');
+      attempts.push({ label, length: cleanText(text).length });
+      if (cleanText(text).length > 120 && !looksLikeTimelineOnly(text)) {
+        return { label, text, url: docPage.url() };
+      }
+      if (popup) await popup.close().catch(() => {});
+    } catch (error) {
+      attempts.push({ label, error: String(error.message || error) });
+    }
+  }
+
+  throw new Error(`Documento integral nao localizado/extraido no PJe. Tentativas: ${JSON.stringify(attempts).slice(0, 800)}`);
 }
 
 async function loginPje(page) {
@@ -206,7 +248,8 @@ async function main() {
     for (const process of targets) {
       try {
         const detail = await openPjeProcess(context, page, process);
-        const res = summarizePjeText(detail.text, process.cnj);
+        const document = await extractPjeDocumentText(context, detail.page);
+        const res = summarizePjeDocumentText(document.text, document.label);
         const payload = {
           res,
           ver: today,
