@@ -43,7 +43,7 @@ function splitCnj(cnj) {
 }
 
 function looksLikeTimelineOnly(text) {
-  return /icone de atualizar|icone de recolher|processo detalhes|autos digitais/i.test(cleanText(text));
+  return /icone de atualizar|icone de recolher|processo detalhes|autos digitais|mais detalhes|classe judicial|polo ativo|polo passivo/i.test(cleanText(text));
 }
 
 function summarizePjeDocumentText(text, label = '') {
@@ -127,10 +127,11 @@ async function clickFirst(page, locators, timeout = 3000) {
 }
 
 async function extractPjeDocumentText(context, detailPage) {
-  const candidates = detailPage.locator('a, button, input[type="button"], input[type="submit"]');
+  const candidates = detailPage.locator('a');
   const count = Math.min(await candidates.count().catch(() => 0), 120);
-  const terms = /despacho|decis[aã]o|senten[cç]a|ac[oó]rd[aã]o|intima[cç][aã]o|certid[aã]o|mandado|peti[cç][aã]o|anexo|outros documentos|visualizar|documento|\d{6,}/i;
+  const terms = /\d{6,}\s*-\s*(despacho|decis[aã]o|senten[cç]a|ac[oó]rd[aã]o|intima[cç][aã]o|certid[aã]o|mandado|peti[cç][aã]o|anexo|outros documentos|informa[cç][aã]o)/i;
   const attempts = [];
+  const matches = [];
 
   for (let index = 0; index < count; index += 1) {
     const candidate = candidates.nth(index);
@@ -142,13 +143,34 @@ async function extractPjeDocumentText(context, detailPage) {
     })).catch(() => null);
     const label = cleanText(`${meta?.text || ''} ${meta?.title || ''} ${meta?.value || ''}`);
     if (!terms.test(`${label} ${meta?.href || ''}`)) continue;
-    if (/voltar|fechar|imprimir lista|atualizar|recolher|lupa/i.test(label)) continue;
+    if (/voltar|fechar|imprimir lista|atualizar|recolher|lupa|mais detalhes|adicionar lembretes/i.test(label)) continue;
+    const rank = /senten[cç]a|decis[aã]o|despacho|ac[oó]rd[aã]o/i.test(label)
+      ? 0
+      : (/embargos|peti[cç][aã]o|contesta[cç][aã]o|apela[cç][aã]o|recurso/i.test(label)
+          ? 1
+          : (/mandado|informa[cç][aã]o/i.test(label) ? 2 : 3));
+    matches.push({ index, label, rank });
+  }
 
+  matches.sort((a, b) => a.rank - b.rank || a.index - b.index);
+  for (const match of matches) {
+    const candidate = candidates.nth(match.index);
+    const label = match.label;
     try {
-      const popupPromise = context.waitForEvent('page', { timeout: 6000 }).catch(() => null);
       await candidate.click({ timeout: 5000 });
-      const popup = await popupPromise;
-      const docPage = popup || detailPage;
+      await detailPage.waitForLoadState('domcontentloaded', { timeout: 15000 }).catch(() => {});
+      await detailPage.waitForTimeout(2500);
+
+      const opener = detailPage.locator('a[id*="detalheDocumento"][title*="Abrir documento"], a[id*="detalheDocumento"][onclick*="documentoHTML.seam"]').first();
+      const onclick = await opener.getAttribute('onclick', { timeout: 8000 }).catch(() => '');
+      const urlMatch = /window\.open\('([^']+documentoHTML\.seam[^']*)'/.exec(onclick || '');
+      if (!urlMatch) {
+        attempts.push({ label, error: 'link documentoHTML.seam nao encontrado apos selecionar documento' });
+        continue;
+      }
+
+      const docPage = await context.newPage();
+      await docPage.goto(urlMatch[1], { waitUntil: 'domcontentloaded', timeout: 30000 });
       await docPage.waitForLoadState('domcontentloaded', { timeout: 20000 }).catch(() => {});
       await docPage.waitForTimeout(2500);
       const text = await docPage.locator('body').innerText({ timeout: 10000 }).catch(() => '');
@@ -156,7 +178,7 @@ async function extractPjeDocumentText(context, detailPage) {
       if (cleanText(text).length > 120 && !looksLikeTimelineOnly(text)) {
         return { label, text, url: docPage.url() };
       }
-      if (popup) await popup.close().catch(() => {});
+      await docPage.close().catch(() => {});
     } catch (error) {
       attempts.push({ label, error: String(error.message || error) });
     }
@@ -270,7 +292,15 @@ async function main() {
             ...payload
           });
         }
-        report.updated.push({ cnj: process.cnj, cliente: process.cliente, dashboardId, res });
+        report.updated.push({
+          cnj: process.cnj,
+          cliente: process.cliente,
+          dashboardId,
+          documentLabel: document.label,
+          documentUrl: document.url,
+          res,
+          sourceText: cleanText(document.text).slice(0, 8000)
+        });
         if (detail.page !== page) await detail.page.close().catch(() => {});
       } catch (error) {
         report.failed.push({ cnj: process.cnj, cliente: process.cliente, dashboardId: process.dashboardId, reason: String(error.message || error) });
