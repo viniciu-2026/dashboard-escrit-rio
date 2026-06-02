@@ -549,6 +549,9 @@ async function discoverGmailPushes({ fromPtBr, dashboardByCnj }) {
       const subject = getHeader(headers, 'Subject');
       const from = getHeader(headers, 'From');
       const date = getHeader(headers, 'Date');
+      if (/relatorio da atualizacao processual/i.test(subject) || /relat[oó]rio da atualiza[cç][aã]o processual/i.test(subject)) {
+        continue;
+      }
       const bodyText = collectMessageText(detail.payload).join('\n');
       const searchable = `${subject}\n${from}\n${date}\n${detail.snippet || ''}\n${bodyText}`;
       const cnjs = uniqueCnjsFromText(searchable);
