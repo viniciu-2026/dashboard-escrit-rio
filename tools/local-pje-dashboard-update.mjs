@@ -43,7 +43,8 @@ function splitCnj(cnj) {
 }
 
 function looksLikeTimelineOnly(text) {
-  return /icone de atualizar|icone de recolher|processo detalhes|autos digitais|mais detalhes|classe judicial|polo ativo|polo passivo/i.test(cleanText(text));
+  const normalized = cleanText(text);
+  return /[íi]cone de (download|etiqueta|menu|filtro|lupa|atualizar|recolher|seta|estrela)|processo detalhes|autos digitais|mais detalhes|classe judicial|polo ativo|polo passivo|favoritos|lembretes|juntado por .* magistrado/i.test(normalized);
 }
 
 function summarizePjeDocumentText(text, label = '') {
@@ -139,10 +140,11 @@ async function extractPjeDocumentText(context, detailPage) {
       text: (element.textContent || '').replace(/\s+/g, ' ').trim(),
       title: element.getAttribute('title') || '',
       value: element.getAttribute('value') || '',
-      href: element.getAttribute('href') || ''
+      href: element.getAttribute('href') || '',
+      onclick: element.getAttribute('onclick') || ''
     })).catch(() => null);
     const label = cleanText(`${meta?.text || ''} ${meta?.title || ''} ${meta?.value || ''}`);
-    if (!terms.test(`${label} ${meta?.href || ''}`)) continue;
+    if (!terms.test(`${label} ${meta?.href || ''} ${meta?.onclick || ''}`)) continue;
     if (/voltar|fechar|imprimir lista|atualizar|recolher|lupa|mais detalhes|adicionar lembretes/i.test(label)) continue;
     const rank = /senten[cç]a|decis[aã]o|despacho|ac[oó]rd[aã]o/i.test(label)
       ? 0
@@ -157,20 +159,59 @@ async function extractPjeDocumentText(context, detailPage) {
     const candidate = candidates.nth(match.index);
     const label = match.label;
     try {
+      const beforeUrl = detailPage.url();
+      const beforeText = cleanText(await detailPage.locator('body').innerText({ timeout: 5000 }).catch(() => ''));
+      const directMeta = await candidate.evaluate((element) => ({
+        href: element.getAttribute('href') || '',
+        onclick: element.getAttribute('onclick') || ''
+      })).catch(() => ({ href: '', onclick: '' }));
+      const directUrlMatch = /(?:window\.open\(')?([^'"]*documentoHTML\.seam[^'"]*)/.exec(`${directMeta.href || ''}\n${directMeta.onclick || ''}`);
+      if (directUrlMatch) {
+        const docPage = await context.newPage();
+        await docPage.goto(new URL(directUrlMatch[1], detailPage.url()).toString(), { waitUntil: 'domcontentloaded', timeout: 30000 });
+        await docPage.waitForLoadState('domcontentloaded', { timeout: 20000 }).catch(() => {});
+        await docPage.waitForTimeout(2500);
+        const text = await docPage.locator('body').innerText({ timeout: 10000 }).catch(() => '');
+        attempts.push({ label, length: cleanText(text).length, method: 'direct-link' });
+        if (cleanText(text).length > 120 && !looksLikeTimelineOnly(text)) {
+          return { label, text, url: docPage.url() };
+        }
+        await docPage.close().catch(() => {});
+      }
+
+      const popupPromise = detailPage.waitForEvent('popup', { timeout: 7000 }).catch(() => null);
       await candidate.click({ timeout: 5000 });
+      const popup = await popupPromise;
+      if (popup) {
+        await popup.waitForLoadState('domcontentloaded', { timeout: 20000 }).catch(() => {});
+        await popup.waitForTimeout(2500);
+        const text = await popup.locator('body').innerText({ timeout: 10000 }).catch(() => '');
+        attempts.push({ label, length: cleanText(text).length, method: 'popup' });
+        if (cleanText(text).length > 120 && !looksLikeTimelineOnly(text)) {
+          return { label, text, url: popup.url() };
+        }
+        await popup.close().catch(() => {});
+      }
       await detailPage.waitForLoadState('domcontentloaded', { timeout: 15000 }).catch(() => {});
       await detailPage.waitForTimeout(2500);
 
-      const opener = detailPage.locator('a[id*="detalheDocumento"][title*="Abrir documento"], a[id*="detalheDocumento"][onclick*="documentoHTML.seam"]').first();
+      const afterText = cleanText(await detailPage.locator('body').innerText({ timeout: 5000 }).catch(() => ''));
+      if (detailPage.url() !== beforeUrl || (afterText.length > 120 && afterText !== beforeText && !looksLikeTimelineOnly(afterText))) {
+        attempts.push({ label, length: afterText.length, method: 'same-page' });
+        return { label, text: afterText, url: detailPage.url() };
+      }
+
+      const opener = detailPage.locator('a[id*="detalheDocumento"][title*="Abrir documento"], a[id*="detalheDocumento"][onclick*="documentoHTML.seam"], a[onclick*="documentoHTML.seam"], a[href*="documentoHTML.seam"]').first();
       const onclick = await opener.getAttribute('onclick', { timeout: 8000 }).catch(() => '');
-      const urlMatch = /window\.open\('([^']+documentoHTML\.seam[^']*)'/.exec(onclick || '');
+      const href = await opener.getAttribute('href', { timeout: 1000 }).catch(() => '');
+      const urlMatch = /window\.open\('([^']+documentoHTML\.seam[^']*)'/.exec(onclick || '') || /([^'"]*documentoHTML\.seam[^'"]*)/.exec(href || '');
       if (!urlMatch) {
         attempts.push({ label, error: 'link documentoHTML.seam nao encontrado apos selecionar documento' });
         continue;
       }
 
       const docPage = await context.newPage();
-      await docPage.goto(urlMatch[1], { waitUntil: 'domcontentloaded', timeout: 30000 });
+      await docPage.goto(new URL(urlMatch[1], detailPage.url()).toString(), { waitUntil: 'domcontentloaded', timeout: 30000 });
       await docPage.waitForLoadState('domcontentloaded', { timeout: 20000 }).catch(() => {});
       await docPage.waitForTimeout(2500);
       const text = await docPage.locator('body').innerText({ timeout: 10000 }).catch(() => '');
@@ -254,7 +295,12 @@ async function main() {
   const targets = (pending.processes || []).filter((process) => {
     const system = String(process.dashboardSystem || '').toLowerCase();
     if (only.size) return only.has(process.cnj) && process.cnj?.includes('.8.19.');
-    return process.dashboardId && process.cnj?.includes('.8.19.') && system === 'pje';
+    const looksLikeTjrjPje = /^08\d{5}-\d{2}\.\d{4}\.8\.19\./.test(String(process.cnj || ''));
+    return process.cnj?.includes('.8.19.') && (
+      system === 'pje' ||
+      (!system && looksLikeTjrjPje) ||
+      (system === 'no-sistema' && looksLikeTjrjPje)
+    );
   });
 
   const browser = await chromium.launch({
