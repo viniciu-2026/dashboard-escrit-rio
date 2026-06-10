@@ -1985,23 +1985,13 @@ async function runDcpApiUpdates(report) {
         continue;
       }
 
-      const res = buildDcpDashboardText(checked.best.summary);
-      await patchFirebaseProcess(process.dashboardId, {
-        res,
-        ver: todayPtBr(),
-        updatedAt: isoNow(),
-        updatedBy: 'GitHub Actions - DCP API autenticado',
-        updatedByUid: ''
-      });
-      updated += 1;
       results.push({
         cnj: process.cnj,
         dashboardId: process.dashboardId,
         cliente: process.cliente,
-        ok: true,
-        status: checked.status,
-        ver: todayPtBr(),
-        res,
+        ok: false,
+        status: 'dcp-api-movement-only-teor-pendente',
+        reason: 'Processo DCP/TJRJ localizado por API autenticada, mas a integra do documento/peticao do andamento nao foi retornada. Pela skill, res/ver nao foram atualizados.',
         selectedMovementDate: checked.best.summary.date,
         selectedMovement: checked.best.summary.core
       });
