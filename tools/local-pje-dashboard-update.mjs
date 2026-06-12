@@ -127,6 +127,18 @@ async function clickFirst(page, locators, timeout = 3000) {
   return false;
 }
 
+async function hasVisible(page, selectors, timeout = 1000) {
+  for (const selector of selectors) {
+    try {
+      await page.locator(selector).first().waitFor({ state: 'visible', timeout });
+      return true;
+    } catch {
+      // Try next selector.
+    }
+  }
+  return false;
+}
+
 async function extractPjeDocumentText(context, detailPage) {
   const candidates = detailPage.locator('a');
   const count = Math.min(await candidates.count().catch(() => 0), 120);
@@ -229,13 +241,37 @@ async function extractPjeDocumentText(context, detailPage) {
 }
 
 async function loginPje(page) {
-  await page.goto('https://tjrj.pje.jus.br/1g/loginOld.seam', { waitUntil: 'domcontentloaded', timeout: 45000 });
-  await fillBySelectors(page, ['#username', 'input[name="username"]', 'input[type="text"]'], requiredEnv('TRIBUNAL_CPF'));
-  await fillBySelectors(page, ['#password', 'input[name="password"]', 'input[type="password"]'], requiredEnv('TRIBUNAL_PASSWORD'));
-  await clickFirst(page, ['#btnEntrar', 'input[type="submit"]', 'button[type="submit"]'], 5000);
+  const ssoUrl = 'https://sso.cloud.pje.jus.br/auth/realms/pje/protocol/openid-connect/auth?response_type=code&client_id=pje-tjrj-1g&redirect_uri=https%3A%2F%2Ftjrj.pje.jus.br%2F1g%2Flogin.seam&state=codex-local-pje&login=true&scope=openid';
+  await page.goto(ssoUrl, { waitUntil: 'domcontentloaded', timeout: 45000 });
+  const userSelectors = ['#username', 'input[name="username"]', 'input[id*="username"]', 'input[type="text"]'];
+  const passwordSelectors = ['#password', 'input[name="password"]', 'input[id*="password"]', 'input[type="password"]'];
+  if (!(await hasVisible(page, userSelectors, 1500))) {
+    await clickFirst(page, [
+      page.getByRole('link', { name: /^Entrar$/i }),
+      'a:has-text("Entrar")',
+      'button:has-text("Entrar")'
+    ], 8000);
+    await page.waitForLoadState('domcontentloaded', { timeout: 45000 }).catch(() => {});
+    await page.waitForTimeout(2000);
+  }
+  const filledUser = await fillBySelectors(page, userSelectors, requiredEnv('TRIBUNAL_CPF'));
+  const filledPassword = await fillBySelectors(page, passwordSelectors, requiredEnv('TRIBUNAL_PASSWORD'));
+  if (!filledUser || !filledPassword) {
+    throw new Error('Campos de login do PJe nao encontrados apos abrir a tela Entrar.');
+  }
+  await clickFirst(page, [
+    '#btnEntrar',
+    '#kc-login',
+    'button:has-text("Entrar")',
+    'input[type="button"][value*="Entrar"]',
+    'input[type="submit"][value*="Entrar"]'
+  ], 8000);
   await page.waitForLoadState('domcontentloaded', { timeout: 45000 }).catch(() => {});
   await page.waitForTimeout(2500);
   const text = cleanText(await page.locator('body').innerText({ timeout: 10000 }).catch(() => ''));
+  if (/aplicativo de autentica|codigo apresentado|configurar novo dispositivo|duas etapas/i.test(text)) {
+    throw new Error('Login PJe bloqueado por codigo de aplicativo autenticador; nao ha leitura integral sem concluir essa etapa.');
+  }
   if (/inv[aá]lid|incorret|erro.*login/i.test(text) || /loginOld\.seam/i.test(page.url())) {
     throw new Error('Login PJe nao confirmado.');
   }
@@ -312,7 +348,21 @@ async function main() {
   const report = { ok: false, startedAt: new Date().toISOString(), total: targets.length, updated: [], failed: [] };
 
   try {
-    await loginPje(page);
+    try {
+      await loginPje(page);
+    } catch (error) {
+      report.status = 'pje-login-blocked';
+      report.reason = String(error.message || error);
+      for (const process of targets) {
+        report.failed.push({
+          cnj: process.cnj,
+          cliente: process.cliente,
+          dashboardId: process.dashboardId,
+          reason: report.reason
+        });
+      }
+      return;
+    }
     for (const process of targets) {
       try {
         const detail = await openPjeProcess(context, page, process);
