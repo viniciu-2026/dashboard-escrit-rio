@@ -243,6 +243,18 @@ async function extractPjeDocumentText(context, detailPage) {
 async function loginPje(page) {
   const ssoUrl = 'https://sso.cloud.pje.jus.br/auth/realms/pje/protocol/openid-connect/auth?response_type=code&client_id=pje-tjrj-1g&redirect_uri=https%3A%2F%2Ftjrj.pje.jus.br%2F1g%2Flogin.seam&state=codex-local-pje&login=true&scope=openid';
   await page.goto(ssoUrl, { waitUntil: 'domcontentloaded', timeout: 45000 });
+  if (String(process.env.MANUAL_PJE_LOGIN || '').toLowerCase() === 'true') {
+    const deadline = Date.now() + Number(process.env.MANUAL_PJE_LOGIN_TIMEOUT_MS || 900000);
+    while (Date.now() < deadline) {
+      await page.waitForTimeout(3000);
+      const text = cleanText(await page.locator('body').innerText({ timeout: 5000 }).catch(() => ''));
+      const url = page.url();
+      if (/tjrj\.pje\.jus\.br\/1g\//i.test(url) && !/login|auth|autentica|c[oó]digo|senha|Solicitar nova senha/i.test(`${url} ${text}`)) {
+        return;
+      }
+    }
+    throw new Error('Login manual PJe nao foi concluido dentro do prazo de espera.');
+  }
   const userSelectors = ['#username', 'input[name="username"]', 'input[id*="username"]', 'input[type="text"]'];
   const passwordSelectors = ['#password', 'input[name="password"]', 'input[id*="password"]', 'input[type="password"]'];
   if (!(await hasVisible(page, userSelectors, 1500))) {
